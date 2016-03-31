@@ -65,27 +65,29 @@ L.EditToolbar.Edit = L.Handler.extend({
 				.on('touchmove', this._onMouseMove, this)
 				.on('MSPointerMove', this._onMouseMove, this)
 				.on('click', this._editStyle, this)
-                .on('draw:editvertex', this._updateTooltip, this);
+        .on('draw:editvertex', this._updateTooltip, this);
 		}
 	},
 
 	removeHooks: function () {
-		if (this._map) {
-			// Clean up selected layers.
-			this._featureGroup.eachLayer(this._disableLayerEdit, this);
+    if (this._map) {
+      // Clean up selected layers.
+      this._featureGroup.eachLayer(this._disableLayerEdit, this);
 
-			// Clear the backups of the original layers
-			this._uneditedLayerProps = {};
+      // Clear the backups of the original layers
+      this._uneditedLayerProps = {};
 
-			this._tooltip.dispose();
-			this._tooltip = null;
+      this._tooltip.dispose();
+      this._tooltip = null;
 
-			this._map
-				.off('mousemove', this._onMouseMove, this)
-				.off('touchmove', this._onMouseMove, this)
-				.off('MSPointerMove', this._onMouseMove, this);
-		}
-	},
+      this._map
+        .off('mousemove', this._onMouseMove, this)
+        .off('touchmove', this._onMouseMove, this)
+        .off('MSPointerMove', this._onMouseMove, this)
+        .off('click', this._editStyle, this)
+        .off('draw:editvertex', this._updateTooltip, this);
+    }
+  },
 
 	revertLayers: function () {
 		this._featureGroup.eachLayer(function (layer) {
