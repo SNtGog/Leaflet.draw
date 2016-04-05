@@ -30,7 +30,7 @@ L.EditToolbar.Split = L.Handler.extend({
     this.fire('enabled', {handler: this.type});
       //this disable other handlers
 
-    this._map.fire('draw:editstart', { handler: this.type });
+    this._map.fire('draw:splitstart', { handler: this.type });
       //allow drawLayer to be updated before beginning edition.
 
     L.Handler.prototype.enable.call(this);
@@ -45,7 +45,7 @@ L.EditToolbar.Split = L.Handler.extend({
       .off('layeradd', this._enableLayerEdit, this)
       .off('layerremove', this._disableLayerEdit, this);
     L.Handler.prototype.disable.call(this);
-    this._map.fire('draw:editstop', { handler: this.type });
+    this._map.fire('draw:splitstop', { handler: this.type });
     this.fire('disabled', {handler: this.type});
   },
 
@@ -64,8 +64,7 @@ L.EditToolbar.Split = L.Handler.extend({
         .on('mousemove', this._onMouseMove, this)
         .on('touchmove', this._onMouseMove, this)
         .on('MSPointerMove', this._onMouseMove, this)
-        .on('click', this._editStyle, this)
-        .on('draw:editvertex', this._updateTooltip, this);
+        .on('click', this._editStyle, this);
     }
   },
 
@@ -84,8 +83,7 @@ L.EditToolbar.Split = L.Handler.extend({
         .off('mousemove', this._onMouseMove, this)
         .off('touchmove', this._onMouseMove, this)
         .off('MSPointerMove', this._onMouseMove, this)
-        .off('click', this._editStyle, this)
-        .off('draw:editvertex', this._updateTooltip, this);
+        .off('click', this._editStyle, this);
     }
   },
 
@@ -130,8 +128,8 @@ L.EditToolbar.Split = L.Handler.extend({
 
   _getTooltipText: function () {
     return ({
-      text: L.drawLocal.edit.handlers.edit.tooltip.text,
-      subtext: L.drawLocal.edit.handlers.edit.tooltip.subtext
+      text: L.drawLocal.edit.handlers.split.tooltip.text,
+      subtext: L.drawLocal.edit.handlers.split.tooltip.subtext
     });
   },
 

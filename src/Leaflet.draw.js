@@ -100,6 +100,12 @@ L.drawLocal = {
 				tooltip: {
 					text: 'Click on a feature to remove'
 				}
+			},
+			split: {
+			  tooltip: {
+          text: 'Click on polyline to split',
+          subtext: 'Click cancel to undo changes.'
+        }
 			}
 		}
 	}
