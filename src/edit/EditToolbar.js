@@ -46,6 +46,14 @@ L.EditToolbar = L.Toolbar.extend({
 	getModeHandlers: function (map) {
 		var featureGroup = this.options.featureGroup;
 		return [
+      {
+        enabled: this.options.edit,
+        handler: new L.EditToolbar.Split(map, {
+          featureGroup: featureGroup,
+          selectedPathOptions: this.options.edit.selectedPathOptions
+        }),
+        title: L.drawLocal.edit.toolbar.buttons.split
+      },
 			{
 				enabled: this.options.edit,
 				handler: new L.EditToolbar.Edit(map, {

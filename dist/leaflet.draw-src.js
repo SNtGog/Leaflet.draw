@@ -91,7 +91,9 @@ L.drawLocal = {
 				edit: 'Edit layers.',
 				editDisabled: 'No layers to edit.',
 				remove: 'Delete layers.',
-				removeDisabled: 'No layers to delete.'
+				removeDisabled: 'No layers to delete.',
+				split: 'Split tracks',
+				editDisabled: 'No tracks to split.',
 			}
 		},
 		handlers: {
@@ -3024,6 +3026,14 @@ L.EditToolbar = L.Toolbar.extend({
 	getModeHandlers: function (map) {
 		var featureGroup = this.options.featureGroup;
 		return [
+      {
+        enabled: this.options.edit,
+        handler: new L.EditToolbar.Split(map, {
+          featureGroup: featureGroup,
+          selectedPathOptions: this.options.edit.selectedPathOptions
+        }),
+        title: L.drawLocal.edit.toolbar.buttons.split
+      },
 			{
 				enabled: this.options.edit,
 				handler: new L.EditToolbar.Edit(map, {

@@ -84,7 +84,9 @@ L.drawLocal = {
 				edit: 'Edit layers.',
 				editDisabled: 'No layers to edit.',
 				remove: 'Delete layers.',
-				removeDisabled: 'No layers to delete.'
+				removeDisabled: 'No layers to delete.',
+				split: 'Split tracks',
+				editDisabled: 'No tracks to split.',
 			}
 		},
 		handlers: {
