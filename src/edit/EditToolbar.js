@@ -49,8 +49,7 @@ L.EditToolbar = L.Toolbar.extend({
       {
         enabled: this.options.edit,
         handler: new L.EditToolbar.Split(map, {
-          featureGroup: featureGroup,
-          selectedPathOptions: this.options.edit.selectedPathOptions
+          featureGroup: featureGroup
         }),
         title: L.drawLocal.edit.toolbar.buttons.split
       },

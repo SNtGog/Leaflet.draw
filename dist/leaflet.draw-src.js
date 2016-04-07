@@ -3035,8 +3035,7 @@ L.EditToolbar = L.Toolbar.extend({
       {
         enabled: this.options.edit,
         handler: new L.EditToolbar.Split(map, {
-          featureGroup: featureGroup,
-          selectedPathOptions: this.options.edit.selectedPathOptions
+          featureGroup: featureGroup
         }),
         title: L.drawLocal.edit.toolbar.buttons.split
       },
@@ -3147,77 +3146,76 @@ L.EditToolbar = L.Toolbar.extend({
 
 
 L.EditToolbar.Edit = L.Handler.extend({
-	statics: {
-		TYPE: 'edit'
-	},
+  statics: {
+    TYPE: 'edit'
+  },
 
-	includes: L.Mixin.Events,
+  includes: L.Mixin.Events,
 
-	initialize: function (map, options) {
-		L.Handler.prototype.initialize.call(this, map);
+  initialize: function (map, options) {
+    L.Handler.prototype.initialize.call(this, map);
 
-		L.setOptions(this, options);
+    L.setOptions(this, options);
 
-		// Store the selectable layer group for ease of access
-		this._featureGroup = options.featureGroup;
+    // Store the selectable layer group for ease of access
+    this._featureGroup = options.featureGroup;
 
-		if (!(this._featureGroup instanceof L.FeatureGroup)) {
-			throw new Error('options.featureGroup must be a L.FeatureGroup');
-		}
+    if (!(this._featureGroup instanceof L.FeatureGroup)) {
+      throw new Error('options.featureGroup must be a L.FeatureGroup');
+    }
 
-		this._uneditedLayerProps = {};
+    this._uneditedLayerProps = {};
 
-		// Save the type so super can fire, need to do this as cannot do this.TYPE :(
-		this.type = L.EditToolbar.Edit.TYPE;
-	},
+    // Save the type so super can fire, need to do this as cannot do this.TYPE :(
+    this.type = L.EditToolbar.Edit.TYPE;
+  },
 
-	enable: function () {
-		if (this._enabled || !this._hasAvailableLayers()) {
-			return;
-		}
-		this.fire('enabled', {handler: this.type});
-			//this disable other handlers
+  enable: function () {
+    if (this._enabled || !this._hasAvailableLayers()) {
+      return;
+    }
+    this.fire('enabled', {handler: this.type});
+      //this disable other handlers
 
-		this._map.fire('draw:editstart', { handler: this.type });
-			//allow drawLayer to be updated before beginning edition.
+    this._map.fire('draw:editstart', { handler: this.type });
+      //allow drawLayer to be updated before beginning edition.
 
-		L.Handler.prototype.enable.call(this);
-		this._featureGroup
-			.on('layeradd', this._enableLayerEdit, this)
-			.on('layerremove', this._disableLayerEdit, this);
-	},
+    L.Handler.prototype.enable.call(this);
+    this._featureGroup
+      .on('layeradd', this._enableLayerEdit, this)
+      .on('layerremove', this._disableLayerEdit, this);
+  },
 
-	disable: function () {
-		if (!this._enabled) { return; }
-		this._featureGroup
-			.off('layeradd', this._enableLayerEdit, this)
-			.off('layerremove', this._disableLayerEdit, this);
-		L.Handler.prototype.disable.call(this);
-		this._map.fire('draw:editstop', { handler: this.type });
-		this.fire('disabled', {handler: this.type});
-	},
+  disable: function () {
+    if (!this._enabled) { return; }
+    this._featureGroup
+      .off('layeradd', this._enableLayerEdit, this)
+      .off('layerremove', this._disableLayerEdit, this);
+    L.Handler.prototype.disable.call(this);
+    this._map.fire('draw:editstop', { handler: this.type });
+    this.fire('disabled', {handler: this.type});
+  },
 
-	addHooks: function () {
-		var map = this._map;
+  addHooks: function () {
+    var map = this._map;
 
-		if (map) {
-			map.getContainer().focus();
+    if (map) {
+      map.getContainer().focus();
 
-			this._featureGroup.eachLayer(this._enableLayerEdit, this);
+      this._featureGroup.eachLayer(this._enableLayerEdit, this);
 
-			this._tooltip = new L.Tooltip(this._map);
-			this._updateTooltip();
+      this._tooltip = new L.Tooltip(this._map);
+      this._updateTooltip();
 
-			this._map
-				.on('mousemove', this._onMouseMove, this)
-				.on('touchmove', this._onMouseMove, this)
-				.on('MSPointerMove', this._onMouseMove, this)
-				.on('click', this._editStyle, this)
+      this._map
+        .on('mousemove', this._onMouseMove, this)
+        .on('touchmove', this._onMouseMove, this)
+        .on('MSPointerMove', this._onMouseMove, this)
         .on('draw:editvertex', this._updateTooltip, this);
-		}
-	},
+    }
+  },
 
-	removeHooks: function () {
+  removeHooks: function () {
     if (this._map) {
       // Clean up selected layers.
       this._featureGroup.eachLayer(this._disableLayerEdit, this);
@@ -3232,161 +3230,154 @@ L.EditToolbar.Edit = L.Handler.extend({
         .off('mousemove', this._onMouseMove, this)
         .off('touchmove', this._onMouseMove, this)
         .off('MSPointerMove', this._onMouseMove, this)
-        .off('click', this._editStyle, this)
         .off('draw:editvertex', this._updateTooltip, this);
     }
   },
 
-	revertLayers: function () {
-		this._featureGroup.eachLayer(function (layer) {
-			this._revertLayer(layer);
-		}, this);
-	},
+  revertLayers: function () {
+    this._featureGroup.eachLayer(function (layer) {
+      this._revertLayer(layer);
+    }, this);
+  },
 
-	save: function () {
-		var editedLayers = new L.LayerGroup();
-		this._featureGroup.eachLayer(function (layer) {
-			if (layer.edited) {
-				editedLayers.addLayer(layer);
-				layer.edited = false;
-			}
-		});
-		this._map.fire('draw:edited', {layers: editedLayers});
-	},
+  save: function () {
+    var editedLayers = new L.LayerGroup();
+    this._featureGroup.eachLayer(function (layer) {
+      if (layer.edited) {
+        editedLayers.addLayer(layer);
+        layer.edited = false;
+      }
+    });
+    this._map.fire('draw:edited', {layers: editedLayers});
+  },
 
-	_backupLayer: function (layer) {
-		var id = L.Util.stamp(layer);
+  _backupLayer: function (layer) {
+    var id = L.Util.stamp(layer);
 
-		if (!this._uneditedLayerProps[id]) {
-			// Polyline, Polygon or Rectangle
-			if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-				this._uneditedLayerProps[id] = {
-					latlngs: L.LatLngUtil.cloneLatLngs(layer.getLatLngs())
-				};
-			} else if (layer instanceof L.Circle) {
-				this._uneditedLayerProps[id] = {
-					latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng()),
-					radius: layer.getRadius()
-				};
-			} else if (layer instanceof L.Marker) { // Marker
-				this._uneditedLayerProps[id] = {
-					latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng())
-				};
-			}
-		}
-	},
+    if (!this._uneditedLayerProps[id]) {
+      // Polyline, Polygon or Rectangle
+      if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
+        this._uneditedLayerProps[id] = {
+          latlngs: L.LatLngUtil.cloneLatLngs(layer.getLatLngs())
+        };
+      } else if (layer instanceof L.Circle) {
+        this._uneditedLayerProps[id] = {
+          latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng()),
+          radius: layer.getRadius()
+        };
+      } else if (layer instanceof L.Marker) { // Marker
+        this._uneditedLayerProps[id] = {
+          latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng())
+        };
+      }
+    }
+  },
 
-	_getTooltipText: function () {
-		return ({
-			text: L.drawLocal.edit.handlers.edit.tooltip.text,
-			subtext: L.drawLocal.edit.handlers.edit.tooltip.subtext
-		});
-	},
+  _getTooltipText: function () {
+    return ({
+      text: L.drawLocal.edit.handlers.edit.tooltip.text,
+      subtext: L.drawLocal.edit.handlers.edit.tooltip.subtext
+    });
+  },
 
-	_updateTooltip: function () {
-		this._tooltip.updateContent(this._getTooltipText());
-	},
+  _updateTooltip: function () {
+    this._tooltip.updateContent(this._getTooltipText());
+  },
 
-	_revertLayer: function (layer) {
-		var id = L.Util.stamp(layer);
-		layer.edited = false;
-		if (this._uneditedLayerProps.hasOwnProperty(id)) {
-			// Polyline, Polygon or Rectangle
-			if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-				layer.setLatLngs(this._uneditedLayerProps[id].latlngs);
-			} else if (layer instanceof L.Circle) {
-				layer.setLatLng(this._uneditedLayerProps[id].latlng);
-				layer.setRadius(this._uneditedLayerProps[id].radius);
-			} else if (layer instanceof L.Marker) { // Marker
-				layer.setLatLng(this._uneditedLayerProps[id].latlng);
-			}
+  _revertLayer: function (layer) {
+    var id = L.Util.stamp(layer);
+    layer.edited = false;
+    if (this._uneditedLayerProps.hasOwnProperty(id)) {
+      // Polyline, Polygon or Rectangle
+      if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
+        layer.setLatLngs(this._uneditedLayerProps[id].latlngs);
+      } else if (layer instanceof L.Circle) {
+        layer.setLatLng(this._uneditedLayerProps[id].latlng);
+        layer.setRadius(this._uneditedLayerProps[id].radius);
+      } else if (layer instanceof L.Marker) { // Marker
+        layer.setLatLng(this._uneditedLayerProps[id].latlng);
+      }
 
-			layer.fire('revert-edited', { layer: layer });
-		}
-	},
+      layer.fire('revert-edited', { layer: layer });
+    }
+  },
 
-	_enableLayerEdit: function (e) {
-		var layer = e.layer || e.target || e,
-			pathOptions;
+  _enableLayerEdit: function (e) {
+    var layer = e.layer || e.target || e,
+      pathOptions;
 
-		// Back up this layer (if haven't before)
-		this._backupLayer(layer);
+    // Back up this layer (if haven't before)
+    this._backupLayer(layer);
 
-		// Set different style for editing mode
-		if (this.options.selectedPathOptions) {
-			pathOptions = L.Util.extend({}, this.options.selectedPathOptions);
+    // Set different style for editing mode
+    if (this.options.selectedPathOptions) {
+      pathOptions = L.Util.extend({}, this.options.selectedPathOptions);
 
-			// Use the existing color of the layer
-			if (pathOptions.maintainColor) {
-				pathOptions.color = layer.options.color;
-				pathOptions.fillColor = layer.options.fillColor;
-			}
+      // Use the existing color of the layer
+      if (pathOptions.maintainColor) {
+        pathOptions.color = layer.options.color;
+        pathOptions.fillColor = layer.options.fillColor;
+      }
 
-			layer.options.original = L.extend({}, layer.options);
-			layer.options.editing = pathOptions;
-		}
+      layer.options.original = L.extend({}, layer.options);
+      layer.options.editing = pathOptions;
+    }
 
-		if (this.isMarker) {
-			layer.dragging.enable();
-			layer
-				.on('dragend', this._onMarkerDragEnd)
-				// #TODO: remove when leaflet finally fixes their draggable so it's touch friendly again.
-				.on('touchmove', this._onTouchMove, this)
-				.on('MSPointerMove', this._onTouchMove, this)
-				.on('touchend', this._onMarkerDragEnd, this)
-				.on('MSPointerUp', this._onMarkerDragEnd, this);
-		} else {
-			layer.editing.enable();
-		}
-	},
+    if (layer instanceof L.Marker) {
+      layer.dragging.enable();
+      layer
+        // #TODO: remove when leaflet finally fixes their draggable so it's touch friendly again.
+        .on('touchmove', this._onTouchMove, this)
+        .on('MSPointerMove', this._onTouchMove, this);
+    } else {
+      layer.editing.enable();
+    }
+  },
 
-	_disableLayerEdit: function (e) {
-		var layer = e.layer || e.target || e;
+  _disableLayerEdit: function (e) {
+    var layer = e.layer || e.target || e;
 
-		layer.edited = false;
-		layer.editing.disable();
+    layer.edited = false;
+    layer.editing.disable();
 
-		delete layer.options.editing;
-		delete layer.options.original;
-		// Reset layer styles to that of before select
-		if (this._selectedPathOptions) {
-			if (layer instanceof L.Marker) {
-				this._toggleMarkerHighlight(layer);
-			} else {
-				// reset the layer style to what is was before being selected
-				layer.setStyle(layer.options.previousOptions);
-				// remove the cached options for the layer object
-				delete layer.options.previousOptions;
-			}
-		}
+    delete layer.options.editing;
+    delete layer.options.original;
+    // Reset layer styles to that of before select
+    if (this._selectedPathOptions) {
+      if (layer instanceof L.Marker) {
+        this._toggleMarkerHighlight(layer);
+      } else {
+        // reset the layer style to what is was before being selected
+        layer.setStyle(layer.options.previousOptions);
+        // remove the cached options for the layer object
+        delete layer.options.previousOptions;
+      }
+    }
 
-		if (layer instanceof L.Marker) {
-			layer.dragging.disable();
-			layer
-				.off('dragend', this._onMarkerDragEnd, this)
-				.off('touchmove', this._onTouchMove, this)
-				.off('MSPointerMove', this._onTouchMove, this)
-				.off('touchend', this._onMarkerDragEnd, this)
-				.off('MSPointerUp', this._onMarkerDragEnd, this);
-		} else {
-			layer.editing.disable();
-		}
-	},
+    if (layer instanceof L.Marker) {
+      layer.dragging.disable();
+      layer
+        .off('touchmove', this._onTouchMove, this)
+        .off('MSPointerMove', this._onTouchMove, this);
+    } else {
+      layer.editing.disable();
+    }
+  },
 
-	_onMouseMove: function (e) {
-		this._tooltip.updatePosition(e.latlng);
-	},
+  _onMouseMove: function (e) {
+    this._tooltip.updatePosition(e.latlng);
+  },
 
-	_onTouchMove: function (e) {
-		var touchEvent = e.originalEvent.changedTouches[0],
-			layerPoint = this._map.mouseEventToLayerPoint(touchEvent),
-			latlng = this._map.layerPointToLatLng(layerPoint);
-		e.target.setLatLng(latlng);
-	},
+  _onTouchMove: function (e) {
+    var touchEvent = e.originalEvent.changedTouches[0],
+      layerPoint = this._map.mouseEventToLayerPoint(touchEvent),
+      latlng = this._map.layerPointToLatLng(layerPoint);
+    e.target.setLatLng(latlng);
+  },
 
-	_hasAvailableLayers: function () {
-		return this._featureGroup.getLayers().length !== 0;
-	}
+  _hasAvailableLayers: function () {
+    return this._featureGroup.getLayers().length !== 0;
+  }
 });
 
 
@@ -3539,7 +3530,7 @@ L.EditToolbar.Split = L.Handler.extend({
     this._uneditedLayerProps = {};
 
     // Save the type so super can fire, need to do this as cannot do this.TYPE :(
-    this.type = L.EditToolbar.Edit.TYPE;
+    this.type = L.EditToolbar.Split.TYPE;
   },
 
   enable: function () {
@@ -3549,33 +3540,29 @@ L.EditToolbar.Split = L.Handler.extend({
     this.fire('enabled', {handler: this.type});
       //this disable other handlers
 
-    this._map.fire('draw:splitstart', { handler: this.type });
+    this._map.fire('draw:editstart', { handler: this.type });
       //allow drawLayer to be updated before beginning edition.
 
     L.Handler.prototype.enable.call(this);
     this._featureGroup
-      .on('layeradd', this._enableLayerEdit, this)
-      .on('layerremove', this._disableLayerEdit, this);
+      .on('layeradd', this._enableLayerSplit, this)
+      .on('layerremove', this._disableLayerSplit, this);
   },
 
   disable: function () {
     if (!this._enabled) { return; }
     this._featureGroup
-      .off('layeradd', this._enableLayerEdit, this)
-      .off('layerremove', this._disableLayerEdit, this);
+      .off('layeradd', this._enableLayerSplit, this)
+      .off('layerremove', this._disableLayerSplit, this);
     L.Handler.prototype.disable.call(this);
-    this._map.fire('draw:splitstop', { handler: this.type });
+    this._map.fire('draw:editstop', { handler: this.type });
     this.fire('disabled', {handler: this.type});
   },
 
   addHooks: function () {
-    var map = this._map;
-
-    if (map) {
-      map.getContainer().focus();
-
-      this._featureGroup.eachLayer(this._enableLayerEdit, this);
-
+    if (this._map) {
+      this._map.getContainer().focus();
+      this._featureGroup.eachLayer(this._enableLayerSplit, this);
       this._tooltip = new L.Tooltip(this._map);
       this._updateTooltip();
 
@@ -3583,14 +3570,14 @@ L.EditToolbar.Split = L.Handler.extend({
         .on('mousemove', this._onMouseMove, this)
         .on('touchmove', this._onMouseMove, this)
         .on('MSPointerMove', this._onMouseMove, this)
-        .on('click', this._editStyle, this);
+        .on('click', this._onMouseClick, this);
     }
   },
 
   removeHooks: function () {
     if (this._map) {
       // Clean up selected layers.
-      this._featureGroup.eachLayer(this._disableLayerEdit, this);
+      this._featureGroup.eachLayer(this._disableLayerSplit, this);
 
       // Clear the backups of the original layers
       this._uneditedLayerProps = {};
@@ -3602,7 +3589,7 @@ L.EditToolbar.Split = L.Handler.extend({
         .off('mousemove', this._onMouseMove, this)
         .off('touchmove', this._onMouseMove, this)
         .off('MSPointerMove', this._onMouseMove, this)
-        .off('click', this._editStyle, this);
+        .off('click', this._onMouseClick, this);
     }
   },
 
@@ -3610,6 +3597,24 @@ L.EditToolbar.Split = L.Handler.extend({
     this._featureGroup.eachLayer(function (layer) {
       this._revertLayer(layer);
     }, this);
+  },
+
+  _revertLayer: function (layer) {
+    var id = L.Util.stamp(layer);
+    layer.edited = false;
+    if (this._uneditedLayerProps.hasOwnProperty(id)) {
+      // Polyline, Polygon or Rectangle
+      if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
+        layer.setLatLngs(this._uneditedLayerProps[id].latlngs);
+      } else if (layer instanceof L.Circle) {
+        layer.setLatLng(this._uneditedLayerProps[id].latlng);
+        layer.setRadius(this._uneditedLayerProps[id].radius);
+      } else if (layer instanceof L.Marker) { // Marker
+        layer.setLatLng(this._uneditedLayerProps[id].latlng);
+      }
+
+      layer.fire('revert-edited', { layer: layer });
+    }
   },
 
   save: function () {
@@ -3620,7 +3625,7 @@ L.EditToolbar.Split = L.Handler.extend({
         layer.edited = false;
       }
     });
-    this._map.fire('draw:edited', {layers: editedLayers});
+    this._map.fire('draw:splitted', {layers: editedLayers});
   },
 
   _backupLayer: function (layer) {
@@ -3656,64 +3661,28 @@ L.EditToolbar.Split = L.Handler.extend({
     this._tooltip.updateContent(this._getTooltipText());
   },
 
-  _revertLayer: function (layer) {
-    var id = L.Util.stamp(layer);
-    layer.edited = false;
-    if (this._uneditedLayerProps.hasOwnProperty(id)) {
-      // Polyline, Polygon or Rectangle
-      if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-        layer.setLatLngs(this._uneditedLayerProps[id].latlngs);
-      } else if (layer instanceof L.Circle) {
-        layer.setLatLng(this._uneditedLayerProps[id].latlng);
-        layer.setRadius(this._uneditedLayerProps[id].radius);
-      } else if (layer instanceof L.Marker) { // Marker
-        layer.setLatLng(this._uneditedLayerProps[id].latlng);
-      }
-
-      layer.fire('revert-edited', { layer: layer });
-    }
+  _hasAvailableLayers: function () {
+    return this._featureGroup.getLayers().length !== 0;
   },
 
-  _enableLayerEdit: function (e) {
+  _enableLayerSplit: function (e) {
     var layer = e.layer || e.target || e,
       pathOptions;
-
+    layer.options.vertexWeight = 10;
     // Back up this layer (if haven't before)
     this._backupLayer(layer);
 
-    // Set different style for editing mode
-    if (this.options.selectedPathOptions) {
-      pathOptions = L.Util.extend({}, this.options.selectedPathOptions);
-
-      // Use the existing color of the layer
-      if (pathOptions.maintainColor) {
-        pathOptions.color = layer.options.color;
-        pathOptions.fillColor = layer.options.fillColor;
-      }
-
-      layer.options.original = L.extend({}, layer.options);
-      layer.options.editing = pathOptions;
-    }
-
-    if (this.isMarker) {
-      layer.dragging.enable();
-      layer
-        .on('dragend', this._onMarkerDragEnd)
-        // #TODO: remove when leaflet finally fixes their draggable so it's touch friendly again.
-        .on('touchmove', this._onTouchMove, this)
-        .on('MSPointerMove', this._onTouchMove, this)
-        .on('touchend', this._onMarkerDragEnd, this)
-        .on('MSPointerUp', this._onMarkerDragEnd, this);
-    } else {
-      layer.editing.enable();
-    }
+    layer
+      .on('touchmove', this._onTouchMove, this)
+      .on('MSPointerMove', this._onTouchMove, this)
+      .on('mousemove', this._onLayerMouseMove, this)
+      .on('vertex:click', this._onVertexClick, this);
   },
 
-  _disableLayerEdit: function (e) {
+  _disableLayerSplit: function (e) {
     var layer = e.layer || e.target || e;
 
     layer.edited = false;
-    layer.editing.disable();
 
     delete layer.options.editing;
     delete layer.options.original;
@@ -3729,33 +3698,172 @@ L.EditToolbar.Split = L.Handler.extend({
       }
     }
 
-    if (layer instanceof L.Marker) {
-      layer.dragging.disable();
-      layer
-        .off('dragend', this._onMarkerDragEnd, this)
-        .off('touchmove', this._onTouchMove, this)
-        .off('MSPointerMove', this._onTouchMove, this)
-        .off('touchend', this._onMarkerDragEnd, this)
-        .off('MSPointerUp', this._onMarkerDragEnd, this);
-    } else {
-      layer.editing.disable();
-    }
+    layer
+      .off('touchmove', this._onTouchMove, this)
+      .off('MSPointerMove', this._onTouchMove, this)
+      .off('mousemove', this._onLayerMouseMove, this)
+      .off('vertex:click', this._onVertexClick, this);
   },
 
   _onMouseMove: function (e) {
     this._tooltip.updatePosition(e.latlng);
+    if (this._splitPoint) {
+      this._showSplitPoint(this._splitPoint.layer,e.layerPoint);
+    }
+//    if (this._splitPoint) {
+//      var pos = e.layerPoint;
+//      var distance = this._map.getZoom();
+//      var distanceX = Math.abs(pos.x - this._splitPoint.x);
+//      var distanceY = Math.abs(pos.y - this._splitPoint.y);
+//      if (distanceX > distance && distanceY > distance) {
+//        this._splitPoint.layer.removeVertices();
+//        delete this._splitPoint;
+//      }
+//    }
+  },
+
+  _onMouseClick: function(e) {
+    if (this._splitPoint) {
+      this._splitPoint.layer.removeVertices();
+      delete this._splitPoint;
+    }
+
+    if (this._tempLine) {
+      this._map.removeLayer(this._tempLine);
+      this._tempLine.edited = true;
+      this._tempLine.splitted = true;
+      this._tempLine.addTo(this._featureGroup);
+      delete this._tempLine;
+    }
   },
 
   _onTouchMove: function (e) {
     var touchEvent = e.originalEvent.changedTouches[0],
       layerPoint = this._map.mouseEventToLayerPoint(touchEvent),
       latlng = this._map.layerPointToLatLng(layerPoint);
-    e.target.setLatLng(latlng);
   },
 
-  _hasAvailableLayers: function () {
-    return this._featureGroup.getLayers().length !== 0;
-  }
+  _onLayerMouseMove: function(e) {
+    var pos = e.layerPoint,
+      layer = e.target;
+    this._layer = layer;
+    if (layer instanceof L.Polyline) {
+      this._showSplitPoint(layer,pos);
+    }
+  },
+
+  _onVertexClick: function(e) {
+    if (this._splitPoint) {
+      if (e.layer != this._splitPoint.layer) {
+        return this._startSplit(e);
+      }
+      this._splitLayer(e);
+    } else {
+      this._startSplit(e);
+    }
+  },
+
+  _startSplit: function(e) {
+    var layer = e.target,
+      point = e.point;
+    this._splitPoint = point;
+    this._splitPoint.layer = layer;
+  },
+
+  _stopSplit: function() {
+    delete this._splitPoint;
+  },
+
+  _splitLayer: function(e) {
+
+
+  },
+
+  _getSegment: function(layer, start, end) {
+    var latLngs = layer.getLatLngs();
+    var _start = this._map.layerPointToLatLng(start);
+    var _end = this._map.layerPointToLatLng(end);
+
+    var startIndex = -1,
+        endIndex = -1;
+    for (var i = 0; i < latLngs.length; i++) {
+      var _latLng = latLngs[i];
+      if (_latLng.lat == _start.lat && _latLng.lon == _start.lon) {
+        startIndex = i;
+      }
+      if (_latLng.lat == _end.lat && _latLng.lon == _end.lon) {
+        endIndex = i;
+      }
+    }
+
+    if (startIndex !== -1 && endIndex !== -1) {
+      if (startIndex > endIndex) {
+        startIndex=startIndex+endIndex;
+        endIndex=startIndex-endIndex;
+        startIndex=startIndex-endIndex;
+      }
+      var segment = latLngs.slice(startIndex, endIndex+1);
+      return L.polyline(segment);
+    }
+    return false;
+  },
+
+  _addSegment: function(latLngs) {
+    var layer = L.polyline(latLngs);
+    layer.edited = true;
+    layer.splitted = true;
+    layer._map = this._map;
+    layer.addTo(this._featureGroup);
+  },
+
+  _getSplitPoint: function(layer, pos) {
+    var closest = null;
+    var list = layer._originalPoints;
+    var distance = this._map.getZoom();
+    for (var i = 0; i < list.length; i++) {
+      var distanceX = Math.abs(pos.x - list[i].x);
+      var distanceY = Math.abs(pos.y - list[i].y);
+      if (distanceX < distance && distanceY < distance) {
+        if (!closest) {
+          closest = list[i];
+        } else {
+          var distanceX2 = Math.abs(pos.x - closest.x);
+          var distanceY2 = Math.abs(pos.y - closest.y);
+          if (distanceX < distanceX2 && distanceY < distanceY2) {
+            closest = list[i];
+          }
+        }
+      }
+    }
+    return closest;
+  },
+
+  _showSplitPoint: function(layer,pos) {
+    var closest = this._getSplitPoint(layer, pos);
+    if (!closest){
+      return;
+    }
+    if (!this._splitPoint) {
+      if (this._lastLayer && this._lastLayer != layer ) {
+        this._lastLayer.removeVertices();
+      }
+      layer.removeVertices();
+      layer.addVertex(closest);
+      this._lastLayer = layer;
+    } else {
+      if (this._tempLine) {
+        this._map.removeLayer(this._tempLine);
+      }
+
+      this._tempLine = this._getSegment(layer, this._splitPoint, closest);
+      if (!this._tempLine) {
+        return;
+      }
+      this._tempLine.setStyle({weight: 10, color: '#b8860b'});
+      this._tempLine.addTo(this._map);
+    }
+  },
+
 });
 
 
