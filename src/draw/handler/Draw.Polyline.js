@@ -85,6 +85,9 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 				});
 			}
 
+			this._continueHandlers = [];
+			this._map.drawnItems.eachLayer(this._addContinueHandler, this);
+
 			this._mouseMarker
 				.on('mousedown', this._onMouseDown, this)
 				.on('mouseout', this._onMouseOut, this)
@@ -99,6 +102,10 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 				.on('click', this._onTouch, this)
 				.on('zoomend', this._onZoomEnd, this);
 		}
+
+		this._eachContinueHandler(function (handler) {
+      handler.addHooks();
+    });
 	},
 
 	removeHooks: function () {
@@ -133,6 +140,10 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 			.off('mouseup', this._onMouseUp, this)
 			.off('zoomend', this._onZoomEnd, this)
 			.off('click', this._onTouch, this);
+
+		this._eachContinueHandler(function (handler) {
+      handler.removeHooks();
+    });
 	},
 
 	deleteLastVertex: function () {
@@ -477,5 +488,135 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	_fireCreatedEvent: function () {
 		var poly = new this.Poly(this._poly.getLatLngs(), this.options.shapeOptions);
 		L.Draw.Feature.prototype._fireCreatedEvent.call(this, poly);
-	}
+	},
+
+	_addContinueHandler: function (layer) {
+	  if (layer instanceof L.Polyline) {
+	    this._continueHandlers.push(new L.Draw.PolylineContinue(layer));
+	    layer.on('vertex:click',this._continuePolyline ,this);
+	  }
+	},
+
+	_removeContinueHandlers: function() {
+
+	},
+
+	_continuePolyline: function() {
+	  console.log(arguments);
+	},
+
+	_eachContinueHandler: function (callback) {
+    for (var i = 0; i < this._continueHandlers.length; i++) {
+      callback(this._continueHandlers[i]);
+    }
+  },
+
+  updateMarkers: function () {
+    this._eachContinueHandler(function (handler) {
+      handler.updateMarkers();
+    });
+  }
+
+});
+
+L.Draw.PolylineContinue = L.Handler.extend({
+  options: {
+    icon: new L.DivIcon({
+      iconSize: new L.Point(8, 8),
+      className: 'leaflet-div-icon leaflet-editing-icon'
+    }),
+    touchIcon: new L.DivIcon({
+      iconSize: new L.Point(20, 20),
+      className: 'leaflet-div-icon leaflet-editing-icon leaflet-touch-icon'
+    }),
+  },
+
+  initialize: function (polyline, options) {
+    // if touch, switch to touch icon
+    if (L.Browser.touch) {
+      this.options.icon = this.options.touchIcon;
+    }
+    this._polyline = polyline;
+
+    L.setOptions(this, options);
+  },
+
+  addHooks: function () {
+    this._polyline.setStyle(this._polyline.options.editing);
+
+    if (this._polyline._map) {
+
+      this._map = this._polyline._map; // Set map
+
+      if (!this._markerGroup) {
+        this._initMarkers();
+      }
+      this._polyline._map.addLayer(this._markerGroup);
+    }
+  },
+
+  removeHooks: function () {
+    this._polyline.setStyle(this._polyline.options.original);
+
+    if (this._polyline._map) {
+      this._polyline._map.removeLayer(this._markerGroup);
+      delete this._markerGroup;
+      delete this._markers;
+    }
+  },
+
+  updateMarkers: function () {
+    this._markerGroup.clearLayers();
+    this._initMarkers();
+  },
+
+  _initMarkers: function () {
+    if (!this._markerGroup) {
+      this._markerGroup = new L.LayerGroup();
+    }
+    this._markers = [];
+
+    var latLngs = this._polyline.getLatLngs();
+    this._createMarker(latLngs[0], 1);
+    this._createMarker(latLngs[latLngs.length-1], 2);
+  },
+
+  _createMarker: function (latlng, index) {
+    // Extending L.Marker in TouchEvents.js to include touch.
+    var marker = new L.Marker.Touch(latlng, {
+      draggable: true,
+      icon: this.options.icon,
+    });
+
+    marker._origLatLng = latlng;
+    marker._index = index;
+
+    marker
+      .on('click', this._fireExtend, this)
+      .on('touchend', this._fireExtend, this)
+      .on('MSPointerUp', this._fireExtend, this);
+
+    this._markerGroup.addLayer(marker);
+
+    this._markers.push(marker);
+    return marker;
+  },
+
+  _removeMarker: function (marker) {
+    marker
+      .off('touchend', this._fireExtend, this)
+      .off('click', this._fireExtend, this)
+      .off('MSPointerUp', _fireExtend, this);
+  },
+
+//  _fireEdit: function () {
+//    this._poly.edited = true;
+//    this._poly.fire('edit');
+//    this._poly._map.fire('draw:editvertex', { layers: this._markerGroup });
+//  },
+
+  _fireExtend: function (e) {
+    console.log(arguments);
+  },
+
 });
