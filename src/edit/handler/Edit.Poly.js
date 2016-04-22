@@ -13,13 +13,10 @@ L.Edit.Poly = L.Handler.extend({
 			this.latlngs = this.latlngs.concat(poly._holes);
 		}
 
-		this._verticesHandlers = [];
-		for (var i = 0; i < this.latlngs.length; i++) {
-			this._verticesHandlers.push(new L.Edit.PolyVerticesEdit(poly, this.latlngs[i], options));
-		}
-
 		this._poly = poly;
 		L.setOptions(this, options);
+
+		this._poly.on('revert-edited', this._updateLatLngs, this);
 	},
 
 	_eachVertexHandler: function (callback) {
@@ -29,6 +26,7 @@ L.Edit.Poly = L.Handler.extend({
 	},
 
 	addHooks: function () {
+	  this._initHandlers();
 		this._eachVertexHandler(function (handler) {
 			handler.addHooks();
 		});
@@ -44,7 +42,21 @@ L.Edit.Poly = L.Handler.extend({
 		this._eachVertexHandler(function (handler) {
 			handler.updateMarkers();
 		});
-	}
+	},
+
+	_initHandlers: function () {
+    this._verticesHandlers = [];
+    for (var i = 0; i < this.latlngs.length; i++) {
+      this._verticesHandlers.push(new L.Edit.PolyVerticesEdit(this._poly, this.latlngs[i], this.options));
+    }
+  },
+
+  _updateLatLngs: function(e) {
+    this.latlngs = [e.layer._latlngs];
+    if (e.layer._holes) {
+      this.latlngs = this.latlngs.concat(e.layer._holes);
+    }
+  }
 
 });
 
@@ -199,7 +211,9 @@ L.Edit.PolyVerticesEdit = L.Handler.extend({
 			.off('dragend', this._fireEdit, this)
 			.off('touchmove', this._onMarkerDrag, this)
 			.off('touchend', this._fireEdit, this)
-			.off('click', this._onMarkerClick, this);
+			.off('click', this._onMarkerClick, this)
+			.off('MSPointerMove', this._onTouchMove, this)
+      .off('MSPointerUp', this._fireEdit, this);
 	},
 
 	_fireEdit: function () {
