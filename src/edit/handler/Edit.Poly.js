@@ -16,7 +16,7 @@ L.Edit.Poly = L.Handler.extend({
 		this._poly = poly;
 		L.setOptions(this, options);
 
-		this._poly.on('revert-edited', this._updateLatLngs, this);
+		this._poly.on('revert-edited draw:continued', this._updateLatLngs, this);
 	},
 
 	_eachVertexHandler: function (callback) {
@@ -52,9 +52,9 @@ L.Edit.Poly = L.Handler.extend({
 	},
 
 	_updateLatLngs: function (e) {
-		this.latlngs = [e.layer._latlngs];
-		if (e.layer._holes) {
-			this.latlngs = this.latlngs.concat(e.layer._holes);
+		this.latlngs = [e.target._latlngs];
+		if (e.target._holes) {
+			this.latlngs = this.latlngs.concat(e.target._holes);
 		}
 	}
 

@@ -508,6 +508,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		var poly;
 		if (this._hiddenPoly) {
 			poly = this._hiddenPoly;
+			poly.fire('draw:continued');
 		} else {
 			poly = new this.Poly(this._poly.getLatLngs(), this.options.shapeOptions);
 		}
@@ -537,6 +538,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 
 		var latLngs = e.target._latlngs,
 			i;
+
 		if (e.index === 0) {
 			latLngs = latLngs.reverse();
 			this._hiddenPoly.reversed = true;
@@ -660,4 +662,3 @@ L.Draw.PolylineContinue = L.Handler.extend({
 	},
 
 });
-

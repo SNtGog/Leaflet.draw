@@ -21,6 +21,7 @@ L.EditToolbar = L.Toolbar.extend({
 			}
 		},
 		remove: {},
+		split: {},
 		featureGroup: null /* REQUIRED! TODO: perhaps if not set then all layers on the map are selectable? */
 	},
 
@@ -46,13 +47,13 @@ L.EditToolbar = L.Toolbar.extend({
 	getModeHandlers: function (map) {
 		var featureGroup = this.options.featureGroup;
 		return [
-      {
-        enabled: this.options.edit,
-        handler: new L.EditToolbar.Split(map, {
-          featureGroup: featureGroup
-        }),
-        title: L.drawLocal.edit.toolbar.buttons.split
-      },
+			{
+				enabled: this.options.split,
+				handler: new L.EditToolbar.Split(map, {
+					featureGroup: featureGroup
+				}),
+				title: L.drawLocal.edit.toolbar.buttons.split
+			},
 			{
 				enabled: this.options.edit,
 				handler: new L.EditToolbar.Edit(map, {
