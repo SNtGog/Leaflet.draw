@@ -48,6 +48,10 @@ L.EditToolbar.Split = L.Handler.extend({
         this._map.fire('draw:editstop', { handler: this.type });
         this.fire('disabled', {handler: this.type});
         this._removeSplitPoints();
+
+        if (this._tempLine) {
+          this._removeTempLine();
+        }
     },
 
     addHooks: function () {
@@ -218,19 +222,17 @@ L.EditToolbar.Split = L.Handler.extend({
             this._splitPoint = null;
         }
 
+        if (this._tempLine) {
+            this._removeTempLine();
+        }
+
         if (!splitPoint) {
-            if (this._tempLine) {
-                this._removeTempLine();
-            }
             return; //too far
         }
 
         this._splitPoint = this._showSplitPoint(splitPoint);
 
         if (this._firstSplitPoint) {
-            if (this._tempLine) {
-                this._removeTempLine();
-            }
 
             if (this._firstSplitPoint.layer !== this._splitPoint.layer) {
                 return;
@@ -380,8 +382,8 @@ L.EditToolbar.Split = L.Handler.extend({
     },
 
     _removeTempLine: function () {
-        this._tempLine.off('click');
-        this._map.removeLayer(this._tempLine);
+        this._tempLine.off('click', null, null, null);
+        this._featureGroup.removeLayer(this._tempLine);
         this._tempLine = null;
         return this;
     },
