@@ -47,6 +47,7 @@ L.EditToolbar.Split = L.Handler.extend({
         L.Handler.prototype.disable.call(this);
         this._map.fire('draw:editstop', { handler: this.type });
         this.fire('disabled', {handler: this.type});
+        this._removeSplitPoints();
     },
 
     addHooks: function () {
@@ -190,6 +191,18 @@ L.EditToolbar.Split = L.Handler.extend({
 
         if (this._firstSplitPoint) {
             this._showSplitPoint(this._firstSplitPoint);
+        }
+    },
+
+    _removeSplitPoints: function () {
+        if (this._splitPoint) {
+            this._map._pathRoot.removeChild(this._splitPoint.vertex);
+            this._splitPoint = null;
+        }
+
+        if (this._firstSplitPoint) {
+            this._map._pathRoot.removeChild(this._firstSplitPoint.vertex);
+            this._firstSplitPoint = null;
         }
     },
 
