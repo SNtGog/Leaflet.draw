@@ -209,17 +209,18 @@ L.EditToolbar.Split = L.Handler.extend({
     _onMouseMove: function (e) {
         this._tooltip.updatePosition(e.latlng);
         var pointA = e.layerPoint,
-            splitPoint = this._getSplitPoint(pointA);
+            splitPoint = this._getSplitPoint(pointA),
+            templine;
 
         if (this._splitPoint) {
+            this._splitPoint.vertex.onmouseclick = null;
             this._map._pathRoot.removeChild(this._splitPoint.vertex);
             this._splitPoint = null;
         }
 
         if (!splitPoint) {
             if (this._tempLine) {
-                this._featureGroup.removeLayer(this._tempLine);
-                this._tempLine = null;
+                this._removeTempLine();
             }
             return; //too far
         }
@@ -228,20 +229,18 @@ L.EditToolbar.Split = L.Handler.extend({
 
         if (this._firstSplitPoint) {
             if (this._tempLine) {
-                this._featureGroup.removeLayer(this._tempLine);
-                this._tempLine = null;
+                this._removeTempLine();
             }
 
             if (this._firstSplitPoint.layer !== this._splitPoint.layer) {
                 return;
             }
 
-            this._tempLine = this._getSegment(this._firstSplitPoint, this._splitPoint);
-            if (!this._tempLine) {
+            templine = this._getSegment(this._firstSplitPoint, this._splitPoint);
+            if (!templine) {
                 return;
             }
-            this._tempLine.setStyle({weight: 10, color: '#b8860b'});
-            this._tempLine.addTo(this._featureGroup);
+            this._addTempLine(templine);
         }
     },
 
@@ -250,18 +249,13 @@ L.EditToolbar.Split = L.Handler.extend({
             this._startSplit();
         } else {
 
-            if (this._splitPoint.layer === this._firstSplitPoint.layer) {
+            if (this._splitPoint && this._firstSplitPoint) {
                 if (this._tempLine) {
                     this._tempLine.edited = true;
                     this._tempLine.splitted = true;
                     this.save();
-                    this._map.removeLayer(this._tempLine);
-
-                    this._map._pathRoot.removeChild(this._splitPoint.vertex);
-                    this._map._pathRoot.removeChild(this._firstSplitPoint.vertex);
-                    this._splitPoint = null;
-                    this._firstSplitPoint = null;
-                    delete this._tempLine;
+                    this._removeTempLine();
+                    this._removeSplitPoints();
                     this.disable();
                 }
             }
@@ -278,9 +272,6 @@ L.EditToolbar.Split = L.Handler.extend({
     _startSplit: function () {
         this._firstSplitPoint = this._splitPoint;
         this._splitPoint = null;
-    },
-    _stopSplit: function () {
-        delete this._splitPoint;
     },
 
     _getSegment: function (start, end) {
@@ -378,6 +369,21 @@ L.EditToolbar.Split = L.Handler.extend({
         latlng.point = point;
         latlng.vertex = vertex;
         return latlng;
+    },
+
+    _addTempLine: function (polyline) {
+        polyline.setStyle({weight: 10, color: '#b8860b'});
+        polyline.addTo(this._featureGroup);
+        polyline.on('click', L.bind(this._onMouseClick, this));
+        this._tempLine = polyline;
+        return this;
+    },
+
+    _removeTempLine: function () {
+        this._tempLine.off('click');
+        this._map.removeLayer(this._tempLine);
+        this._tempLine = null;
+        return this;
     },
 
     closestLayerPoint: function (p, layer) {
