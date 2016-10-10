@@ -524,44 +524,64 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_removeContinueHandlers: function () {
+	  var _this = this;
 		this._eachContinueHandler(function (handler) {
 			handler.removeHooks();
-			handler._polyline.off('vertex:click', this._continuePolyline, this);
+			handler._polyline.off('vertex:click', _this._continuePolyline, _this);
 		});
 		this._continueHandlers = [];
 	},
 
+	_removeContinueHandler: function (polyline) {
+	  var _this = this;
+		this._eachContinueHandler(function (handler, index) {
+		  if (handler._polyline === polyline) {
+		    handler.removeHooks();
+			  handler._polyline.off('vertex:click', _this._continuePolyline, _this);
+			  _this._continueHandlers.splice(index, 1);
+		  }
+		});
+	},
+
 	_continuePolyline: function (e) {
-		this._hiddenPoly = e.target;
-//		this._removeContinueHandlers();
-		this._map.drawnItems.removeLayer(this._hiddenPoly);
+
+	  var merge = false;
+
+	  this._removeContinueHandler(e.target);
+
+		if (this._hiddenPoly) {
+			this._removeContinueHandlers();
+			this._map.drawnItems.removeLayer(e.target);
+			this._map.fire('draw:deleted', { layers: new L.FeatureGroup().addLayer(e.target) });
+			merge = true;
+		} else {
+			this._hiddenPoly = e.target;
+			this._map.drawnItems.removeLayer(this._hiddenPoly);
+		}
 
 		var latLngs = e.target._latlngs,
-			i;
+			  i = 0;
 
-    if (!this._markers.length) {
-      if (e.index === 0) {
-        latLngs = latLngs.reverse();
-        this._hiddenPoly.reversed = true;
-      }
-      for (i = 0; i < latLngs.length; i++) {
+    if ((!this._markers.length && e.index === 0) ||
+        (this._markers.length && e.index !== 0)) {
+      this._hiddenPoly.reversed = true;
+      for (i = latLngs.length; i >= 0; i--) {
         this.addVertex(latLngs[i]);
       }
-
     } else {
-      if (e.index !== 0) {
-        latLngs = latLngs.reverse();
-      }
       for (i = 0; i < latLngs.length; i++) {
         this.addVertex(latLngs[i]);
       }
+    }
+
+    if (merge) {
       this._finishShape();
-	  }
+    }
 	},
 
 	_eachContinueHandler: function (callback) {
 		for (var i = 0; i < this._continueHandlers.length; i++) {
-			callback(this._continueHandlers[i]);
+			callback(this._continueHandlers[i], i);
 		}
 	},
 
