@@ -733,22 +733,23 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 
 	_continuePolyline: function (e) {
 		this._hiddenPoly = e.target;
-		this._removeContinueHandlers();
+//		this._removeContinueHandlers();
 		this._map.drawnItems.removeLayer(this._hiddenPoly);
 
 		var latLngs = e.target._latlngs,
 			i;
 
-	  if (!this._markers.length) {
-	    if (e.index === 0) {
+    if (!this._markers.length) {
+      if (e.index === 0) {
         latLngs = latLngs.reverse();
         this._hiddenPoly.reversed = true;
       }
       for (i = 0; i < latLngs.length; i++) {
         this.addVertex(latLngs[i]);
       }
-	  } else {
-	    if (e.index !== 0) {
+
+    } else {
+      if (e.index !== 0) {
         latLngs = latLngs.reverse();
       }
       for (i = 0; i < latLngs.length; i++) {
