@@ -745,7 +745,9 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 
 	_continuePolyline: function (e) {
 
-	  var merge = false;
+	  var merge = false,
+	      latLngs = e.target._latlngs,
+			  i = 0;
 
 	  this._removeContinueHandler(e.target);
 
@@ -759,13 +761,10 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 			this._map.drawnItems.removeLayer(this._hiddenPoly);
 		}
 
-		var latLngs = e.target._latlngs,
-			  i = 0;
-
     if ((!this._markers.length && e.index === 0) ||
         (this._markers.length && e.index !== 0)) {
       this._hiddenPoly.reversed = true;
-      for (i = latLngs.length; i >= 0; i--) {
+      for (i = latLngs.length-1; i >= 0; i--) {
         this.addVertex(latLngs[i]);
       }
     } else {
