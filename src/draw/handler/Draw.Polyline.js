@@ -545,7 +545,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 
 	_continuePolyline: function (e) {
 
-	  var merge = false,
+	  var finishShape = false,
 	      latLngs = e.target._latlngs,
 			  i = 0;
 
@@ -555,11 +555,14 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 			this._removeContinueHandlers();
 			this._map.drawnItems.removeLayer(e.target);
 			this._map.fire('draw:deleted', { layers: new L.FeatureGroup().addLayer(e.target) });
-			merge = true;
 		} else {
 			this._hiddenPoly = e.target;
 			this._map.drawnItems.removeLayer(this._hiddenPoly);
 		}
+
+		if (this._markers.length || this._hiddenPoly) {
+      finishShape = true;
+    }
 
     if ((!this._markers.length && e.index === 0) ||
         (this._markers.length && e.index !== 0)) {
@@ -573,7 +576,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
       }
     }
 
-    if (merge) {
+    if (finishShape) {
       this._finishShape();
     }
 	},
