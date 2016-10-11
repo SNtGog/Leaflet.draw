@@ -689,7 +689,8 @@ L.Draw.PolylineContinue = L.Handler.extend({
 		this._polyline.fire('vertex:click', {
 			polyline: this._polyline,
 			index: e.target._index,
-			latlng: e.latlng
+			latlng: e.latlng,
+			originalEvent: e
 		});
 	},
 
