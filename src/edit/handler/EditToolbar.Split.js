@@ -212,8 +212,8 @@ L.EditToolbar.Split = L.Handler.extend({
 
     _onMouseMove: function (e) {
         this._tooltip.updatePosition(e.latlng);
-        var pointA = e.layerPoint,
-            splitPoint = this._getSplitPoint(pointA),
+        var latlng = e.latlng,
+            splitPoint = this._getSplitPoint(latlng),
             templine;
 
         if (this._splitPoint) {
@@ -283,8 +283,7 @@ L.EditToolbar.Split = L.Handler.extend({
             segment = [],
             firstPoint = start,
             endPoint = end,
-            latlngs = [],
-            i;
+            latlngs = [];
 
         if (startIndex > endIndex) {
             startIndex = startIndex + endIndex;
@@ -295,10 +294,7 @@ L.EditToolbar.Split = L.Handler.extend({
         }
         segment.push(firstPoint);
 
-        latlngs = layer._originalPoints.slice(startIndex, endIndex);
-        for (i = 0; i < latlngs.length; i++) {
-            latlngs[i] = this._map.layerPointToLatLng(L.point(latlngs[i].x, latlngs[i].y));
-        }
+        latlngs = layer.getLatLngs().slice(startIndex, endIndex);
         segment = segment.concat(latlngs);
         segment.push(endPoint);
 
@@ -314,36 +310,34 @@ L.EditToolbar.Split = L.Handler.extend({
         layer.addTo(this._featureGroup);
     },
 
-    _getSplitPoint: function (pointA) {
-        var pointB = null,
+    _getSplitPoint: function (latlng) {
+        var closest = null,
             _this = this,
             _layer = null,
             _index,
-            closest;
+            temp;
 
         if (!this._firstSplitPoint) {
             this._featureGroup.eachLayer(function (layer) {
                 if (layer instanceof L.Polyline) {
-                    closest = _this.closestLayerPoint(pointA, layer);
-                    if (!pointB || pointB.distance > closest.distance) {
-                        pointB = closest;
+                    temp = _this.closestLayerPoint(latlng, layer);
+                    if (!closest || closest.distance > temp.distance) {
+                        closest = temp;
                         _layer = layer;
-                        _index = pointB.index;
+                        _index = closest.index;
                     }
                 }
             });
         } else {
-            closest = _this.closestLayerPoint(pointA, this._firstSplitPoint.layer);
-            pointB = closest;
+            closest = _this.closestLayerPoint(latlng, this._firstSplitPoint.layer);
             _layer = this._firstSplitPoint.layer;
-            _index = pointB.index;
+            _index = closest.index;
         }
 
-        if (pointB && pointB.distance < 20) {
-            pointB = this._map.layerPointToLatLng(pointB);
-            pointB.layer = _layer;
-            pointB.index = _index;
-            return pointB;
+        if (closest && closest.distance < 20) {
+            closest.layer = _layer;
+            closest.index = _index;
+            return closest;
         }
         return null;
     },
@@ -388,16 +382,29 @@ L.EditToolbar.Split = L.Handler.extend({
         return this;
     },
 
-    closestLayerPoint: function (p, layer) {
-        var minDistance = Infinity, p1, p2, minPoint = null;
-        var points = layer._originalPoints;
-        for (var i = 1, len = points.length; i < len; i++) {
-            p1 = points[i - 1];
-            p2 = points[i];
+    closestLayerPoint: function (latlng, layer) {
+        var minDistance = Infinity,
+                          p,
+                          p1,
+                          p2,
+                          minPoint = null,
+                          latlngs = layer.getLatLngs(),
+                          _this = this;
+
+        var project = function(latlng) {
+          return _this._map.project(L.latLng(latlng));
+        };
+
+        p = project(latlng);
+
+        for (var i = 1, len = latlngs.length; i < len; i++) {
+            p1 = project(latlngs[i - 1]);
+            p2 = project(latlngs[i]);
             var sqDist = L.LineUtil._sqClosestPointOnSegment(p, p1, p2, true);
             if (sqDist < minDistance) {
                 minDistance = sqDist;
                 minPoint = L.LineUtil._sqClosestPointOnSegment(p, p1, p2);
+                minPoint = this._map.unproject(minPoint);
                 minPoint.index = i;
             }
         }
