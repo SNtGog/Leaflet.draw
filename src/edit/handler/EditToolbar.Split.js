@@ -120,6 +120,7 @@ L.EditToolbar.Split = L.Handler.extend({
             if (layer.edited) {
                 editedLayers.addLayer(layer);
                 layer.edited = false;
+                layer.properties = { type: 'segment'};
             }
         });
         this._map.fire('draw:splitted', {layers: editedLayers});
@@ -254,7 +255,6 @@ L.EditToolbar.Split = L.Handler.extend({
             if (this._splitPoint && this._firstSplitPoint) {
                 if (this._tempLine) {
                     this._tempLine.edited = true;
-                    this._tempLine.splitted = true;
                     this.save();
                     this._removeTempLine();
                     this._removeSplitPoints();
@@ -302,14 +302,6 @@ L.EditToolbar.Split = L.Handler.extend({
 
     },
 
-    _addSegment: function (latLngs) {
-        var layer = L.polyline(latLngs);
-        layer.edited = true;
-        layer.splitted = true;
-        layer._map = this._map;
-        layer.addTo(this._featureGroup);
-    },
-
     _getSplitPoint: function (latlng) {
         var closest = null,
             _this = this,
@@ -319,7 +311,7 @@ L.EditToolbar.Split = L.Handler.extend({
 
         if (!this._firstSplitPoint) {
             this._featureGroup.eachLayer(function (layer) {
-                if (layer instanceof L.Polyline) {
+                if (layer instanceof L.Polyline && (!layer.properties || layer.properties.type !== 'segment')) {
                     temp = _this.closestLayerPoint(latlng, layer);
                     if (!closest || closest.distance > temp.distance) {
                         closest = temp;
@@ -404,7 +396,7 @@ L.EditToolbar.Split = L.Handler.extend({
             if (sqDist < minDistance) {
                 minDistance = sqDist;
                 minPoint = L.LineUtil._sqClosestPointOnSegment(p, p1, p2);
-                minPoint = this._map.unproject(minPoint);
+                minPoint = _this._map.unproject(minPoint);
                 minPoint.index = i;
             }
         }

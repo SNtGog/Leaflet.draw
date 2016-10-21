@@ -22,6 +22,7 @@ L.EditToolbar = L.Toolbar.extend({
 		},
 		remove: {},
 		split: {},
+		erase: {},
 		featureGroup: null /* REQUIRED! TODO: perhaps if not set then all layers on the map are selectable? */
 	},
 
@@ -61,6 +62,13 @@ L.EditToolbar = L.Toolbar.extend({
 					selectedPathOptions: this.options.edit.selectedPathOptions
 				}),
 				title: L.drawLocal.edit.toolbar.buttons.edit
+			},
+			{
+				enabled: this.options.erase,
+				handler: new L.EditToolbar.Erase(map, {
+					featureGroup: featureGroup,
+				}),
+				title: L.drawLocal.edit.toolbar.buttons.erase
 			},
 			{
 				enabled: this.options.remove,

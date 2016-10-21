@@ -68,6 +68,7 @@ var deps = {
 			'edit/handler/EditToolbar.Edit.js',
 			'edit/handler/EditToolbar.Delete.js',
 			'edit/handler/EditToolbar.Split.js',
+			'edit/handler/EditToolbar.Erase.js',
 		],
 		desc: 'Edit toolbar.',
 		deps: ['EditHandlers', 'CommonUI']

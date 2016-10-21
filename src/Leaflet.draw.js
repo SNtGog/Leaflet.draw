@@ -87,6 +87,8 @@ L.drawLocal = {
                 removeDisabled: 'No layers to delete.',
                 split: 'Split tracks',
                 splitDisabled: 'No tracks to split.',
+                erase: 'Erase lines',
+                eraseDisabled: 'Nothing to erase'
             }
         },
         handlers: {
@@ -104,6 +106,12 @@ L.drawLocal = {
             split: {
                 tooltip: {
                     text: 'Click on polyline to split',
+                    subtext: 'Click cancel to undo changes.'
+                }
+            },
+            erase: {
+                tooltip: {
+                    text: 'Erase lines under cursor',
                     subtext: 'Click cancel to undo changes.'
                 }
             }
