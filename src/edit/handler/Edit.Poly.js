@@ -16,7 +16,7 @@ L.Edit.Poly = L.Handler.extend({
 		this._poly = poly;
 		L.setOptions(this, options);
 
-		this._poly.on('revert-edited draw:continued', this._updateLatLngs, this);
+		this._poly.on('revert-edited changed', this._updateLatLngs, this);
 	},
 
 	_eachVertexHandler: function (callback) {

@@ -508,7 +508,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		var poly;
 		if (this._hiddenPoly) {
 			poly = this._hiddenPoly;
-			poly.fire('draw:continued');
+			poly.fire('changed');
 		} else {
 			poly = new this.Poly(this._poly.getLatLngs(), this.options.shapeOptions);
 		}

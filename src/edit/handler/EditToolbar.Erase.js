@@ -119,6 +119,7 @@ L.EditToolbar.Erase = L.Handler.extend({
             if (layer.edited && !layer.deleted) {
                 editedLayers.addLayer(layer);
                 layer.edited = false;
+                layer.fire('changed', { layer: layer });
             }
 
             if (layer.deleted) {
@@ -186,8 +187,8 @@ L.EditToolbar.Erase = L.Handler.extend({
     },
 
     _onMouseUp: function (e) {
-      this.erase(e.latlng);
       if (e.originalEvent.button === 2) {
+        this.erase(e.latlng);
         this._erasing = false;
       }
     },
@@ -216,7 +217,7 @@ L.EditToolbar.Erase = L.Handler.extend({
                     p2 = _this._map.latLngToLayerPoint(p2);
                     var sqDist = L.LineUtil._sqDist(p, p2);
 
-                    if (sqDist < 40) {
+                    if (sqDist < 80) {
                       latlngs.splice(i,1);
 
                       if (latlngs.length > 1) {
