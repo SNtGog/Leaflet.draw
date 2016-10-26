@@ -1475,15 +1475,9 @@ L.Edit.Poly = L.Handler.extend({
 	},
 
 	_initHandlers: function () {
-    var handlerClass = L.Edit.PolyVerticesEdit;
-
-		if (this._poly.properties && this._poly.properties.type === 'segment') {
-		  handlerClass = L.Edit.SegmentVerticesEdit;
-		}
-
 		this._verticesHandlers = [];
 		for (var i = 0; i < this.latlngs.length; i++) {
-			this._verticesHandlers.push(new handlerClass(this._poly, this.latlngs[i], this.options));
+			this._verticesHandlers.push(new L.Edit.PolyVerticesEdit(this._poly, this.latlngs[i], this.options));
 		}
 	},
 
@@ -1846,6 +1840,115 @@ L.Edit.PolyVerticesEdit = L.Handler.extend({
 	}
 });
 
+L.Polyline.addInitHook(function () {
+
+	// Check to see if handler has already been initialized. This is to support versions of Leaflet that still have L.Handler.PolyEdit
+	if (this.editing || this instanceof L.Segment) {
+		return;
+	}
+
+	if (L.Edit.Poly) {
+
+		this.editing = new L.Edit.Poly(this, this.options.poly);
+
+		if (this.options.editable) {
+			this.editing.enable();
+		}
+	}
+
+	this.on('add', function () {
+		if (this.editing && this.editing.enabled()) {
+			this.editing.addHooks();
+		}
+	});
+
+	this.on('remove', function () {
+		if (this.editing && this.editing.enabled()) {
+			this.editing.removeHooks();
+		}
+	});
+});
+
+L.Edit = L.Edit || {};
+
+L.Edit.Segment = L.Handler.extend({
+	options: {},
+
+	options: {},
+
+	initialize: function (poly, options) {
+
+		this.latlngs = [poly._latlngs];
+		if (poly._holes) {
+			this.latlngs = this.latlngs.concat(poly._holes);
+		}
+
+		this._poly = poly;
+		L.setOptions(this, options);
+
+		this._poly.on('revert-edited changed', this._updateLatLngs, this);
+	},
+
+	_eachVertexHandler: function (callback) {
+		for (var i = 0; i < this._verticesHandlers.length; i++) {
+			callback(this._verticesHandlers[i]);
+		}
+	},
+
+	addHooks: function () {
+	  var _this = this;
+	  if (this._poly.properties && this._poly.properties.track) {
+		  var trackId = this._poly.properties.track;
+      this._poly._map.eachLayer(function(layer) {
+        if (layer.properties && layer.properties.id === trackId) {
+          _this._poly._track = layer;
+        }
+      });
+		}
+
+		this._initHandlers();
+		this._eachVertexHandler(function (handler) {
+			handler.addHooks();
+		});
+	},
+
+	removeHooks: function () {
+		this._eachVertexHandler(function (handler) {
+			handler.removeHooks();
+		});
+	},
+
+	updateMarkers: function () {
+		this._eachVertexHandler(function (handler) {
+			handler.updateMarkers();
+		});
+	},
+
+	_initHandlers: function () {
+		this._verticesHandlers = [];
+		for (var i = 0; i < this.latlngs.length; i++) {
+			this._verticesHandlers.push(new L.Edit.SegmentVerticesEdit(this._poly, this.latlngs[i], this.options));
+		}
+	},
+
+	_updateLatLngs: function (e) {
+		this.latlngs = [e.target._latlngs];
+		if (e.target._holes) {
+			this.latlngs = this.latlngs.concat(e.target._holes);
+		}
+	},
+
+	_onTrackDelete: function() {
+	  this.removeHooks();
+	  this._map.removeLayer(this._poly);
+
+	  var layers = new L.LayerGroup();
+	  this._poly.addTo(layers);
+	  this._map.fire('draw:deleted', { layers: layers });
+	}
+
+});
+
 L.Edit.SegmentVerticesEdit = L.Handler.extend({
   options: {
 		icon: new L.DivIcon({
@@ -1864,6 +1967,7 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 			this.options.icon = this.options.touchIcon;
 		}
 		this._poly = poly;
+		this._polyColor = poly.options.color;
 
 		if (options && options.drawError) {
 			options.drawError = L.Util.extend({}, this.options.drawError, options.drawError);
@@ -1886,11 +1990,11 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 		if (this._poly._map) {
 
 			this._map = this._poly._map; // Set map
-
-			if (!this._markerGroup) {
-				this._initMarkers();
-			}
-			this._poly._map.addLayer(this._markerGroup);
+      this._drawSplitPoints();
+			this._map
+        .on('zoomend', this._onZoomEnd, this)
+        .on('mousemove', this._onSplitpointMousemove, this)
+        .on('mouseup', this._onMouseUp, this);
 		}
 	},
 
@@ -1900,59 +2004,351 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 		poly.setStyle(poly.options.original);
 
 		if (poly._map) {
-			poly._map.removeLayer(this._markerGroup);
-			delete this._markerGroup;
-			delete this._markers;
+		  this._poly._map
+        .off('zoomend', this._onZoomEnd, this)
+        .off('mousemove', this._onSplitpointMousemove, this)
+        .off('mouseup', this._onMouseUp, this);
+
+      this._removeSplitPoints();
+
+//			poly._map.removeLayer(this._markerGroup);
+//			delete this._markerGroup;
 		}
 	},
 
-	updateMarkers: function () {
-		this._markerGroup.clearLayers();
-		this._initMarkers();
+	_onZoomEnd: function(e) {
+	  this._moveSplitPoints();
 	},
 
-	_initMarkers: function () {
-		if (!this._markerGroup) {
-			this._markerGroup = new L.LayerGroup();
-		}
-		this._markers = [];
-
-		var latlngs = this._latlngs,
-			i, j, len, marker;
-
-		for (i = 0, len = latlngs.length; i < len; i++) {
-
-			marker = this._createMarker(latlngs[i], i);
-			marker.on('click', this._onMarkerClick, this);
-			this._markers.push(marker);
-		}
-
-		var markerLeft, markerRight;
-
-		for (i = 0, j = len - 1; i < len; j = i++) {
-			if (i === 0 && !(L.Polygon && (this._poly instanceof L.Polygon))) {
-				continue;
-			}
-
-			markerLeft = this._markers[j];
-			markerRight = this._markers[i];
-
-			this._createMiddleMarker(markerLeft, markerRight);
-			this._updatePrevNext(markerLeft, markerRight);
-		}
+	_onMouseUp: function(e) {
+	  for (var i = 0; i < this._splitPoints.length; i++) {
+	    this._splitPoints[i]._dragging = false;
+	  }
 	},
+
+	_moveSplitPoints: function(e) {
+	  var splitPoints = this._splitPoints,
+	      length = this._splitPoints.length;
+
+	  for (var i = 0; i < length; i++) {
+	    this._moveSplitPoint(splitPoints[i], null);
+	  }
+	},
+
+	_drawSplitPoints: function() {
+	  var latlngs = this._poly.getLatLngs();
+
+    this._removeSplitPoints();
+
+	  this._splitPoints = [
+	    this._drawSplitPoint(latlngs[0]),
+	    this._drawSplitPoint(latlngs[latlngs.length-1])
+	  ];
+
+	  return this;
+	},
+
+	_removeSplitPoints: function() {
+	  var splitPoints = this._splitPoints || [];
+	  for (var i = 0; i < splitPoints.length; i++) {
+	    this._removeSplitPoint(splitPoints[i]);
+	  }
+	  this._splitPoints = [];
+	},
+
+	_removeSplitPoint: function(splitPoint) {
+	    var vertices = splitPoint.vertices,
+	        length = vertices.length;
+
+	    for (var i = 0; i < length; i++) {
+	      this._map._pathRoot.removeChild(vertices[i]);
+	    }
+	},
+
+	_drawSplitPoint: function (latlng) {
+    var controlVertex = this._createVertex(latlng, 8, '#ffffff'),
+        vertices = [
+          this._createVertex(latlng, 10, '#00ff00'),
+          controlVertex
+        ];
+
+    for (var i = 0; i < vertices.length; i++) {
+      this._map._pathRoot.appendChild(vertices[i]);
+    }
+
+    var closest,
+        index = 0;
+
+    if (this._poly._track) {
+      closest = this.closestLayerPoint(latlng, this._poly._track);
+      index = closest.index;
+    }
+
+    var splitPoint = {
+      latlng: latlng,
+      vertices: vertices,
+      index: index
+    };
+
+    this._addSplitPointHooks(controlVertex, splitPoint);
+    return splitPoint;
+  },
+
+  _createVertex: function(latlng, radius, color) {
+    var namespace = 'http://www.w3.org/2000/svg',
+        point = this._map.latLngToLayerPoint(latlng),
+        vertex;
+
+    vertex = document.createElementNS(namespace, 'circle');
+    vertex.setAttributeNS(null, 'r', radius);
+    vertex.setAttributeNS(null, 'cx', point.x);
+    vertex.setAttributeNS(null, 'cy', point.y);
+    vertex.setAttributeNS(null, 'fill', color);
+    vertex.setAttributeNS(null, 'fill-opacity', this._poly.options.opacity);
+    return vertex;
+  },
+
+  _addSplitPointHooks: function(vertex, splitPoint) {
+    var _this = this;
+    vertex.className.baseVal = 'splitpoint';
+
+    vertex.onmouseover = function(e) {
+      _this._onSplitpointMouseover(e);
+    };
+    vertex.onmouseout = function(e) {
+      _this._onSplitpointMouseout(e, splitPoint);
+    };
+    vertex.onmousedown = function(e) {
+      _this._onSplitpointMousedown(e, splitPoint);
+    };
+    vertex.onmouseup = function(e) {
+      _this._onSplitpointMouseup(e, splitPoint);
+    };
+  },
+
+  _eachSplitVertex: function(callback) {
+    var splitPoints = this._splitPoints;
+    for (var i = 0; i < splitPoints.length; i++) {
+      var vertices = splitPoints[i].vertices;
+      for (var j = 0; j < vertices.length; j++) {
+        if (vertices[j].className.baseVal === 'splitpoint') {
+          callback(vertices[j]);
+        }
+      }
+    }
+  },
+
+  _onSplitpointMouseover: function() {
+    this._map.dragging.disable();
+    this._eachSplitVertex(function(vertex) {
+      vertex.setAttribute('fill', '#C9C9C9', '');
+    });
+
+    this._poly.setStyle({color: '#C9C9C9'});
+  },
+
+  _onSplitpointMouseout: function(e, splitPoint) {
+    this._map.dragging.enable();
+//    splitPoint._dragging = false;
+    this._eachSplitVertex(function(vertex) {
+      vertex.setAttribute('fill', '#ffffff', '');
+    });
+    this._poly.setStyle({color: this._polyColor});
+  },
+
+  _onSplitpointMousedown: function(e, splitPoint) {
+    splitPoint._dragging = true;
+  },
+
+  _onSplitpointMouseup: function(e, splitPoint) {
+    splitPoint._dragging = false;
+  },
+
+  _onSplitpointMousemove: function(e) {
+    var splitPoint,
+        splitPoints = this._splitPoints,
+        length = splitPoints.length;
+
+    for (var i = 0; i < length; i++) {
+      if (splitPoints[i]._dragging) {
+        splitPoint = splitPoints[i];
+      }
+      break;
+    }
+
+    if (!splitPoint || !this._poly._track) {
+      return;
+    }
+    var latlng = e.latlng,
+      latlngs = [],
+      closest;
+
+    this._poly.edited = true;
+    closest = this.closestLayerPoint(latlng, this._poly._track);
+    splitPoint.index = closest.index;
+    this._moveSplitPoint(splitPoint, closest);
+
+    var start = this._splitPoints[0],
+        end = this._splitPoints[1];
+
+    latlngs = this._splitTrack(start, end);
+    this._poly.setLatLngs(latlngs);
+  },
+
+  _moveSplitPoint: function(splitPoint, latlng) {
+    var _latlng = latlng || splitPoint.latlng,
+        vertices = splitPoint.vertices,
+        length = vertices.length,
+        point = this._map.latLngToLayerPoint(_latlng);
+
+    splitPoint.latlng = _latlng;
+    for (var i = 0; i < length; i++) {
+      vertices[i].setAttributeNS(null, 'cx', point.x);
+      vertices[i].setAttributeNS(null, 'cy', point.y);
+    }
+  },
+
+	_createMarker: function (latlng) {
+		var marker = new L.Marker(latlng, {
+			draggable: true,
+		});
+
+		marker._origLatLng = latlng;
+
+		marker
+			.on('dragstart', this._onMarkerDragStart, this)
+			.on('drag', this._onMarkerDrag, this)
+			.on('dragend', this._fireEdit, this)
+			.on('touchmove', this._onTouchMove, this)
+			.on('MSPointerMove', this._onTouchMove, this)
+			.on('touchend', this._fireEdit, this)
+			.on('MSPointerUp', this._fireEdit, this);
+
+		this._markerGroup.addLayer(marker);
+
+		return this;
+	},
+
+	_onMarkerDragStart: function () {
+		this._poly.fire('editstart');
+	},
+
+	_removeMarker: function (marker) {
+		var i = marker._index;
+
+		this._markerGroup.removeLayer(marker);
+		this._markers.splice(i, 1);
+		this._spliceLatLngs(i, 1);
+		this._updateIndexes(i, -1);
+
+		marker
+			.off('dragstart', this._onMarkerDragStart, this)
+			.off('drag', this._onMarkerDrag, this)
+			.off('dragend', this._fireEdit, this)
+			.off('touchmove', this._onMarkerDrag, this)
+			.off('touchend', this._fireEdit, this)
+			.off('MSPointerMove', this._onTouchMove, this)
+			.off('MSPointerUp', this._fireEdit, this);
+	},
+
+	_fireEdit: function () {
+		this._poly.edited = true;
+		this._poly.fire('edit');
+		this._poly._map.fire('draw:editvertex', { layers: this._markerGroup });
+	},
+
+	_onMarkerDrag: function (e) {
+//		var marker = e.target;
+//		var poly = this._poly;
+//
+//		L.extend(marker._origLatLng, marker._latlng);
+//
+//		this._poly.redraw();
+//		this._poly.fire('editdrag');
+	},
+
+	_onTouchMove: function (e) {
+//		var layerPoint = this._map.mouseEventToLayerPoint(e.originalEvent.touches[0]),
+//			latlng = this._map.layerPointToLatLng(layerPoint),
+//			marker = e.target;
+//
+//		L.extend(marker._origLatLng, latlng);
+//
+//		this._poly.redraw();
+//		this.updateMarkers();
+	},
+
+	closestLayerPoint: function (latlng, layer) {
+      var minDistance = Infinity,
+                        p,
+                        p1,
+                        p2,
+                        minPoint = null,
+                        latlngs = layer.getLatLngs(),
+                        _this = this;
+
+      var project = function(latlng) {
+        return _this._map.project(L.latLng(latlng));
+      };
+
+      p = project(latlng);
+
+      for (var i = 1, len = latlngs.length; i < len; i++) {
+          p1 = project(latlngs[i - 1]);
+          p2 = project(latlngs[i]);
+          var sqDist = L.LineUtil._sqClosestPointOnSegment(p, p1, p2, true);
+          if (sqDist < minDistance) {
+              minDistance = sqDist;
+              minPoint = L.LineUtil._sqClosestPointOnSegment(p, p1, p2);
+              minPoint = _this._map.unproject(minPoint);
+              minPoint.index = i;
+          }
+      }
+      if (minPoint) {
+          minPoint.distance = Math.sqrt(minDistance);
+      }
+      return minPoint;
+  },
+
+  _splitTrack: function (start, end) {
+        var track = this._poly._track,
+            startIndex = start.index,
+            endIndex = end.index,
+            trackLatLngs = [],
+            firstPoint = start.latlng,
+            endPoint = end.latlng,
+            latlngs = [];
+
+        if (startIndex > endIndex) {
+            startIndex = startIndex + endIndex;
+            endIndex = startIndex - endIndex;
+            startIndex = startIndex - endIndex;
+            firstPoint = end;
+            endPoint = start;
+        }
+        latlngs.push(firstPoint);
+
+        trackLatLngs = track.getLatLngs().slice(startIndex, endIndex);
+        latlngs = latlngs.concat(trackLatLngs);
+        latlngs.push(endPoint);
+
+        return latlngs;
+
+    },
+
+
 });
 
-L.Polyline.addInitHook(function () {
+L.Segment.addInitHook(function () {
 
 	// Check to see if handler has already been initialized. This is to support versions of Leaflet that still have L.Handler.PolyEdit
 	if (this.editing) {
 		return;
 	}
 
-	if (L.Edit.Poly) {
+	if (L.Edit.Segment) {
 
-		this.editing = new L.Edit.Poly(this, this.options.poly);
+		this.editing = new L.Edit.Segment(this, this.options.poly);
 
 		if (this.options.editable) {
 			this.editing.enable();
@@ -3537,7 +3933,76 @@ L.EditToolbar = L.Toolbar.extend({
 });
 
 
-L.EditToolbar.Edit = L.Handler.extend({
+L.EditToolbar.Handler = L.Handler.extend({
+    includes: L.Mixin.Events,
+
+    revertLayers: function () {
+        this._featureGroup.eachLayer(function (layer) {
+            this._revertLayer(layer);
+        }, this);
+    },
+
+    _revertLayer: function (layer) {
+        var id = L.Util.stamp(layer);
+        layer.edited = false;
+        if (this._uneditedLayerProps.hasOwnProperty(id)) {
+            // Polyline, Polygon or Rectangle
+            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle ||
+              layer instanceof L.Segment) {
+                layer.setLatLngs(this._uneditedLayerProps[id].latlngs);
+            } else if (layer instanceof L.Circle) {
+                layer.setLatLng(this._uneditedLayerProps[id].latlng);
+                layer.setRadius(this._uneditedLayerProps[id].radius);
+            } else if (layer instanceof L.Marker) { // Marker
+                layer.setLatLng(this._uneditedLayerProps[id].latlng);
+            }
+
+            layer.fire('revert-edited', { layer: layer });
+        }
+    },
+
+    _backupLayer: function (layer) {
+        var id = L.Util.stamp(layer);
+
+        if (!this._uneditedLayerProps[id]) {
+            // Polyline, Polygon or Rectangle
+            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle ||
+              layer instanceof L.Segment) {
+                this._uneditedLayerProps[id] = {
+                    latlngs: L.LatLngUtil.cloneLatLngs(layer.getLatLngs())
+                };
+            } else if (layer instanceof L.Circle) {
+                this._uneditedLayerProps[id] = {
+                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng()),
+                    radius: layer.getRadius()
+                };
+            } else if (layer instanceof L.Marker) { // Marker
+                this._uneditedLayerProps[id] = {
+                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng())
+                };
+            }
+        }
+    },
+
+    _getTooltipText: function () {
+        return ({
+            text: L.drawLocal.edit.handlers.split.tooltip.text,
+            subtext: L.drawLocal.edit.handlers.split.tooltip.subtext
+        });
+    },
+
+    _updateTooltip: function () {
+        this._tooltip.updateContent(this._getTooltipText());
+    },
+
+    _hasAvailableLayers: function () {
+        return this._featureGroup.getLayers().length > 0;
+    },
+
+});
+
+
+L.EditToolbar.Edit = L.EditToolbar.Handler.extend({
     statics: {
         TYPE: 'edit'
     },
@@ -3643,55 +4108,11 @@ L.EditToolbar.Edit = L.Handler.extend({
         this._map.fire('draw:edited', {layers: editedLayers});
     },
 
-    _backupLayer: function (layer) {
-        var id = L.Util.stamp(layer);
-
-        if (!this._uneditedLayerProps[id]) {
-          // Polyline, Polygon or Rectangle
-            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                this._uneditedLayerProps[id] = {
-                    latlngs: L.LatLngUtil.cloneLatLngs(layer.getLatLngs())
-                };
-            } else if (layer instanceof L.Circle) {
-                this._uneditedLayerProps[id] = {
-                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng()),
-                    radius: layer.getRadius()
-                };
-            } else if (layer instanceof L.Marker) { // Marker
-                this._uneditedLayerProps[id] = {
-                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng())
-                };
-            }
-        }
-    },
-
     _getTooltipText: function () {
         return ({
             text: L.drawLocal.edit.handlers.edit.tooltip.text,
             subtext: L.drawLocal.edit.handlers.edit.tooltip.subtext
         });
-    },
-
-    _updateTooltip: function () {
-        this._tooltip.updateContent(this._getTooltipText());
-    },
-
-    _revertLayer: function (layer) {
-        var id = L.Util.stamp(layer);
-        layer.edited = false;
-        if (this._uneditedLayerProps.hasOwnProperty(id)) {
-          // Polyline, Polygon or Rectangle
-            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                layer.setLatLngs(this._uneditedLayerProps[id].latlngs);
-            } else if (layer instanceof L.Circle) {
-                layer.setLatLng(this._uneditedLayerProps[id].latlng);
-                layer.setRadius(this._uneditedLayerProps[id].radius);
-            } else if (layer instanceof L.Marker) { // Marker
-                layer.setLatLng(this._uneditedLayerProps[id].latlng);
-            }
-
-            layer.fire('revert-edited', { layer: layer });
-        }
     },
 
     _enableLayerEdit: function (e) {
@@ -3851,6 +4272,9 @@ L.EditToolbar.Delete = L.Handler.extend({
 	},
 
 	save: function () {
+	  this._deletedLayers.eachLayer(function(layer) {
+	    layer.fire('deleted', layer);
+	  });
 		this._map.fire('draw:deleted', { layers: this._deletedLayers });
 	},
 
@@ -3889,7 +4313,7 @@ L.EditToolbar.Delete = L.Handler.extend({
 });
 
 
-L.EditToolbar.Split = L.Handler.extend({
+L.EditToolbar.Split = L.EditToolbar.Handler.extend({
     statics: {
         TYPE: 'split'
     },
@@ -3987,56 +4411,16 @@ L.EditToolbar.Split = L.Handler.extend({
         }, this);
     },
 
-    _revertLayer: function (layer) {
-        var id = L.Util.stamp(layer);
-        layer.edited = false;
-        if (this._uneditedLayerProps.hasOwnProperty(id)) {
-            // Polyline, Polygon or Rectangle
-            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                layer.setLatLngs(this._uneditedLayerProps[id].latlngs);
-            } else if (layer instanceof L.Circle) {
-                layer.setLatLng(this._uneditedLayerProps[id].latlng);
-                layer.setRadius(this._uneditedLayerProps[id].radius);
-            } else if (layer instanceof L.Marker) { // Marker
-                layer.setLatLng(this._uneditedLayerProps[id].latlng);
-            }
-
-            layer.fire('revert-edited', { layer: layer });
-        }
-    },
-
     save: function () {
         var editedLayers = new L.LayerGroup();
         this._featureGroup.eachLayer(function (layer) {
             if (layer.edited) {
                 editedLayers.addLayer(layer);
                 layer.edited = false;
-                layer.properties = { type: 'segment'};
+                layer.properties = layer.properties || {};{ type: 'segment'};
             }
         });
         this._map.fire('draw:splitted', {layers: editedLayers});
-    },
-
-    _backupLayer: function (layer) {
-        var id = L.Util.stamp(layer);
-
-        if (!this._uneditedLayerProps[id]) {
-            // Polyline, Polygon or Rectangle
-            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                this._uneditedLayerProps[id] = {
-                    latlngs: L.LatLngUtil.cloneLatLngs(layer.getLatLngs())
-                };
-            } else if (layer instanceof L.Circle) {
-                this._uneditedLayerProps[id] = {
-                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng()),
-                    radius: layer.getRadius()
-                };
-            } else if (layer instanceof L.Marker) { // Marker
-                this._uneditedLayerProps[id] = {
-                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng())
-                };
-            }
-        }
     },
 
     _getTooltipText: function () {
@@ -4044,14 +4428,6 @@ L.EditToolbar.Split = L.Handler.extend({
             text: L.drawLocal.edit.handlers.split.tooltip.text,
             subtext: L.drawLocal.edit.handlers.split.tooltip.subtext
         });
-    },
-
-    _updateTooltip: function () {
-        this._tooltip.updateContent(this._getTooltipText());
-    },
-
-    _hasAvailableLayers: function () {
-        return this._featureGroup.getLayers().length > 0;
     },
 
     _enableLayerSplit: function (e) {
@@ -4082,11 +4458,11 @@ L.EditToolbar.Split = L.Handler.extend({
 
     _onZoomEnd: function () {
         if (this._splitPoint) {
-            this._showSplitPoint(this._splitPoint);
+            this._drawSplitPoint(this._splitPoint);
         }
 
         if (this._firstSplitPoint) {
-            this._showSplitPoint(this._firstSplitPoint);
+            this._drawSplitPoint(this._firstSplitPoint);
         }
     },
 
@@ -4106,7 +4482,8 @@ L.EditToolbar.Split = L.Handler.extend({
         this._tooltip.updatePosition(e.latlng);
         var latlng = e.latlng,
             splitPoint = this._getSplitPoint(latlng),
-            templine;
+            templine,
+            layer;
 
         if (this._splitPoint) {
             this._splitPoint.vertex.onmouseclick = null;
@@ -4122,7 +4499,7 @@ L.EditToolbar.Split = L.Handler.extend({
             return; //too far
         }
 
-        this._splitPoint = this._showSplitPoint(splitPoint);
+        this._splitPoint = this._drawSplitPoint(splitPoint);
 
         if (this._firstSplitPoint) {
 
@@ -4134,6 +4511,12 @@ L.EditToolbar.Split = L.Handler.extend({
             if (!templine) {
                 return;
             }
+
+            layer = this._firstSplitPoint.layer;
+            if (layer && layer.properties) {
+                templine.properties = {track: layer.properties.id};
+            }
+
             this._addTempLine(templine);
         }
     },
@@ -4172,8 +4555,8 @@ L.EditToolbar.Split = L.Handler.extend({
             startIndex = start.index,
             endIndex = end.index,
             segment = [],
-            firstPoint = start,
-            endPoint = end,
+            firstPoint = start.latlng,
+            endPoint = end.latlng,
             latlngs = [];
 
         if (startIndex > endIndex) {
@@ -4189,7 +4572,7 @@ L.EditToolbar.Split = L.Handler.extend({
         segment = segment.concat(latlngs);
         segment.push(endPoint);
 
-        return L.polyline(segment);
+        return L.segment(segment);
 
     },
 
@@ -4202,7 +4585,7 @@ L.EditToolbar.Split = L.Handler.extend({
 
         if (!this._firstSplitPoint) {
             this._featureGroup.eachLayer(function (layer) {
-                if (layer instanceof L.Polyline && (!layer.properties || layer.properties.type !== 'segment')) {
+                if (layer instanceof L.Polyline) {
                     temp = _this.closestLayerPoint(latlng, layer);
                     if (!closest || closest.distance > temp.distance) {
                         closest = temp;
@@ -4218,36 +4601,36 @@ L.EditToolbar.Split = L.Handler.extend({
         }
 
         if (closest && closest.distance < 20) {
-            closest.layer = _layer;
-            closest.index = _index;
-            return closest;
+            return {
+              latlng: closest,
+              layer: _layer,
+              index: _index
+            };
         }
         return null;
     },
 
-    _showSplitPoint: function (latlng) {
-
-        if (latlng && latlng.vertex) {
-            this._map._pathRoot.removeChild(latlng.vertex);
+    _drawSplitPoint: function (splitPoint) {
+        var latlng = splitPoint.latlng;
+        if (splitPoint.vertex) {
+            this._map._pathRoot.removeChild(splitPoint.vertex);
         }
-        return this._drawSplitPoint(latlng);
-    },
 
-    _drawSplitPoint: function (latlng) {
         var namespace = 'http://www.w3.org/2000/svg',
-            vertex = document.createElementNS('http://www.w3.org/2000/svg', 'circle'),
-            point = this._map.latLngToLayerPoint(latlng);
+            point = this._map.latLngToLayerPoint(latlng),
+            vertex;
 
         vertex = document.createElementNS(namespace, 'circle');
         vertex.setAttributeNS(null, 'r', 5);
         vertex.setAttributeNS(null, 'cx', point.x);
         vertex.setAttributeNS(null, 'cy', point.y);
         vertex.setAttributeNS(null, 'fill', '#00ff00');
-        vertex.setAttributeNS(null, 'fill-opacity', latlng.layer.options.opacity);
+        vertex.setAttributeNS(null, 'fill-opacity', splitPoint.layer.options.opacity);
+
+        splitPoint.vertex = vertex;
+        splitPoint.point = point;
         this._map._pathRoot.appendChild(vertex);
-        latlng.point = point;
-        latlng.vertex = vertex;
-        return latlng;
+        return splitPoint;
     },
 
     _addTempLine: function (polyline) {
@@ -4265,42 +4648,14 @@ L.EditToolbar.Split = L.Handler.extend({
         return this;
     },
 
-    closestLayerPoint: function (latlng, layer) {
-        var minDistance = Infinity,
-                          p,
-                          p1,
-                          p2,
-                          minPoint = null,
-                          latlngs = layer.getLatLngs(),
-                          _this = this;
-
-        var project = function(latlng) {
-          return _this._map.project(L.latLng(latlng));
-        };
-
-        p = project(latlng);
-
-        for (var i = 1, len = latlngs.length; i < len; i++) {
-            p1 = project(latlngs[i - 1]);
-            p2 = project(latlngs[i]);
-            var sqDist = L.LineUtil._sqClosestPointOnSegment(p, p1, p2, true);
-            if (sqDist < minDistance) {
-                minDistance = sqDist;
-                minPoint = L.LineUtil._sqClosestPointOnSegment(p, p1, p2);
-                minPoint = _this._map.unproject(minPoint);
-                minPoint.index = i;
-            }
-        }
-        if (minPoint) {
-            minPoint.distance = Math.sqrt(minDistance);
-        }
-        return minPoint;
+    closestLayerPoint: function () {
+        return L.Edit.SegmentVerticesEdit.closestLayerPoint(arguments);
     },
 
 });
 
 
-L.EditToolbar.Erase = L.Handler.extend({
+L.EditToolbar.Erase = L.EditToolbar.Handler.extend({
     statics: {
         TYPE: 'erase'
     },
@@ -4322,7 +4677,7 @@ L.EditToolbar.Erase = L.Handler.extend({
         this._uneditedLayerProps = {};
 
         // Save the type so super can fire, need to do this as cannot do this.TYPE :(
-        this.type = L.EditToolbar.Split.TYPE;
+        this.type = L.EditToolbar.Erase.TYPE;
     },
 
     enable: function () {
@@ -4387,31 +4742,6 @@ L.EditToolbar.Erase = L.Handler.extend({
         }
     },
 
-    revertLayers: function () {
-        this._featureGroup.eachLayer(function (layer) {
-            this._revertLayer(layer);
-        }, this);
-    },
-
-    _revertLayer: function (layer) {
-        var id = L.Util.stamp(layer);
-        layer.edited = false;
-        layer.deleted = false;
-        if (this._uneditedLayerProps.hasOwnProperty(id)) {
-            // Polyline, Polygon or Rectangle
-            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                layer.setLatLngs(this._uneditedLayerProps[id].latlngs);
-            } else if (layer instanceof L.Circle) {
-                layer.setLatLng(this._uneditedLayerProps[id].latlng);
-                layer.setRadius(this._uneditedLayerProps[id].radius);
-            } else if (layer instanceof L.Marker) { // Marker
-                layer.setLatLng(this._uneditedLayerProps[id].latlng);
-            }
-
-            layer.fire('revert-edited', { layer: layer });
-        }
-    },
-
     save: function () {
         var editedLayers = new L.LayerGroup();
         var deletedLayers = new L.LayerGroup();
@@ -4428,47 +4758,18 @@ L.EditToolbar.Erase = L.Handler.extend({
                 _this._featureGroup.removeLayer(layer);
                 deletedLayers.addLayer(layer);
                 layer.edited = false;
+	              layer.fire('deleted', layer);
             }
         });
         this._map.fire('draw:edited', {layers: editedLayers});
         this._map.fire('draw:deleted', {layers: deletedLayers});
     },
 
-    _backupLayer: function (layer) {
-        var id = L.Util.stamp(layer);
-
-        if (!this._uneditedLayerProps[id]) {
-            // Polyline, Polygon or Rectangle
-            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                this._uneditedLayerProps[id] = {
-                    latlngs: L.LatLngUtil.cloneLatLngs(layer.getLatLngs())
-                };
-            } else if (layer instanceof L.Circle) {
-                this._uneditedLayerProps[id] = {
-                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng()),
-                    radius: layer.getRadius()
-                };
-            } else if (layer instanceof L.Marker) { // Marker
-                this._uneditedLayerProps[id] = {
-                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng())
-                };
-            }
-        }
-    },
-
     _getTooltipText: function () {
         return ({
-            text: L.drawLocal.edit.handlers.split.tooltip.text,
-            subtext: L.drawLocal.edit.handlers.split.tooltip.subtext
+            text: L.drawLocal.edit.handlers.erase.tooltip.text,
+            subtext: L.drawLocal.edit.handlers.erase.tooltip.subtext
         });
-    },
-
-    _updateTooltip: function () {
-        this._tooltip.updateContent(this._getTooltipText());
-    },
-
-    _hasAvailableLayers: function () {
-        return this._featureGroup.getLayers().length > 0;
     },
 
     _onMouseMove: function (e) {

@@ -1,4 +1,4 @@
-L.EditToolbar.Split = L.Handler.extend({
+L.EditToolbar.Split = L.EditToolbar.Handler.extend({
     statics: {
         TYPE: 'split'
     },
@@ -96,56 +96,16 @@ L.EditToolbar.Split = L.Handler.extend({
         }, this);
     },
 
-    _revertLayer: function (layer) {
-        var id = L.Util.stamp(layer);
-        layer.edited = false;
-        if (this._uneditedLayerProps.hasOwnProperty(id)) {
-            // Polyline, Polygon or Rectangle
-            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                layer.setLatLngs(this._uneditedLayerProps[id].latlngs);
-            } else if (layer instanceof L.Circle) {
-                layer.setLatLng(this._uneditedLayerProps[id].latlng);
-                layer.setRadius(this._uneditedLayerProps[id].radius);
-            } else if (layer instanceof L.Marker) { // Marker
-                layer.setLatLng(this._uneditedLayerProps[id].latlng);
-            }
-
-            layer.fire('revert-edited', { layer: layer });
-        }
-    },
-
     save: function () {
         var editedLayers = new L.LayerGroup();
         this._featureGroup.eachLayer(function (layer) {
             if (layer.edited) {
                 editedLayers.addLayer(layer);
                 layer.edited = false;
-                layer.properties = { type: 'segment'};
+                layer.properties = layer.properties || {};{ type: 'segment'};
             }
         });
         this._map.fire('draw:splitted', {layers: editedLayers});
-    },
-
-    _backupLayer: function (layer) {
-        var id = L.Util.stamp(layer);
-
-        if (!this._uneditedLayerProps[id]) {
-            // Polyline, Polygon or Rectangle
-            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                this._uneditedLayerProps[id] = {
-                    latlngs: L.LatLngUtil.cloneLatLngs(layer.getLatLngs())
-                };
-            } else if (layer instanceof L.Circle) {
-                this._uneditedLayerProps[id] = {
-                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng()),
-                    radius: layer.getRadius()
-                };
-            } else if (layer instanceof L.Marker) { // Marker
-                this._uneditedLayerProps[id] = {
-                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng())
-                };
-            }
-        }
     },
 
     _getTooltipText: function () {
@@ -153,14 +113,6 @@ L.EditToolbar.Split = L.Handler.extend({
             text: L.drawLocal.edit.handlers.split.tooltip.text,
             subtext: L.drawLocal.edit.handlers.split.tooltip.subtext
         });
-    },
-
-    _updateTooltip: function () {
-        this._tooltip.updateContent(this._getTooltipText());
-    },
-
-    _hasAvailableLayers: function () {
-        return this._featureGroup.getLayers().length > 0;
     },
 
     _enableLayerSplit: function (e) {
@@ -191,11 +143,11 @@ L.EditToolbar.Split = L.Handler.extend({
 
     _onZoomEnd: function () {
         if (this._splitPoint) {
-            this._showSplitPoint(this._splitPoint);
+            this._drawSplitPoint(this._splitPoint);
         }
 
         if (this._firstSplitPoint) {
-            this._showSplitPoint(this._firstSplitPoint);
+            this._drawSplitPoint(this._firstSplitPoint);
         }
     },
 
@@ -215,7 +167,8 @@ L.EditToolbar.Split = L.Handler.extend({
         this._tooltip.updatePosition(e.latlng);
         var latlng = e.latlng,
             splitPoint = this._getSplitPoint(latlng),
-            templine;
+            templine,
+            layer;
 
         if (this._splitPoint) {
             this._splitPoint.vertex.onmouseclick = null;
@@ -231,7 +184,7 @@ L.EditToolbar.Split = L.Handler.extend({
             return; //too far
         }
 
-        this._splitPoint = this._showSplitPoint(splitPoint);
+        this._splitPoint = this._drawSplitPoint(splitPoint);
 
         if (this._firstSplitPoint) {
 
@@ -243,6 +196,12 @@ L.EditToolbar.Split = L.Handler.extend({
             if (!templine) {
                 return;
             }
+
+            layer = this._firstSplitPoint.layer;
+            if (layer && layer.properties) {
+                templine.properties = {track: layer.properties.id};
+            }
+
             this._addTempLine(templine);
         }
     },
@@ -281,8 +240,8 @@ L.EditToolbar.Split = L.Handler.extend({
             startIndex = start.index,
             endIndex = end.index,
             segment = [],
-            firstPoint = start,
-            endPoint = end,
+            firstPoint = start.latlng,
+            endPoint = end.latlng,
             latlngs = [];
 
         if (startIndex > endIndex) {
@@ -298,7 +257,7 @@ L.EditToolbar.Split = L.Handler.extend({
         segment = segment.concat(latlngs);
         segment.push(endPoint);
 
-        return L.polyline(segment);
+        return L.segment(segment);
 
     },
 
@@ -311,7 +270,7 @@ L.EditToolbar.Split = L.Handler.extend({
 
         if (!this._firstSplitPoint) {
             this._featureGroup.eachLayer(function (layer) {
-                if (layer instanceof L.Polyline && (!layer.properties || layer.properties.type !== 'segment')) {
+                if (layer instanceof L.Polyline) {
                     temp = _this.closestLayerPoint(latlng, layer);
                     if (!closest || closest.distance > temp.distance) {
                         closest = temp;
@@ -327,36 +286,36 @@ L.EditToolbar.Split = L.Handler.extend({
         }
 
         if (closest && closest.distance < 20) {
-            closest.layer = _layer;
-            closest.index = _index;
-            return closest;
+            return {
+              latlng: closest,
+              layer: _layer,
+              index: _index
+            };
         }
         return null;
     },
 
-    _showSplitPoint: function (latlng) {
-
-        if (latlng && latlng.vertex) {
-            this._map._pathRoot.removeChild(latlng.vertex);
+    _drawSplitPoint: function (splitPoint) {
+        var latlng = splitPoint.latlng;
+        if (splitPoint.vertex) {
+            this._map._pathRoot.removeChild(splitPoint.vertex);
         }
-        return this._drawSplitPoint(latlng);
-    },
 
-    _drawSplitPoint: function (latlng) {
         var namespace = 'http://www.w3.org/2000/svg',
-            vertex = document.createElementNS('http://www.w3.org/2000/svg', 'circle'),
-            point = this._map.latLngToLayerPoint(latlng);
+            point = this._map.latLngToLayerPoint(latlng),
+            vertex;
 
         vertex = document.createElementNS(namespace, 'circle');
         vertex.setAttributeNS(null, 'r', 5);
         vertex.setAttributeNS(null, 'cx', point.x);
         vertex.setAttributeNS(null, 'cy', point.y);
         vertex.setAttributeNS(null, 'fill', '#00ff00');
-        vertex.setAttributeNS(null, 'fill-opacity', latlng.layer.options.opacity);
+        vertex.setAttributeNS(null, 'fill-opacity', splitPoint.layer.options.opacity);
+
+        splitPoint.vertex = vertex;
+        splitPoint.point = point;
         this._map._pathRoot.appendChild(vertex);
-        latlng.point = point;
-        latlng.vertex = vertex;
-        return latlng;
+        return splitPoint;
     },
 
     _addTempLine: function (polyline) {
@@ -374,36 +333,8 @@ L.EditToolbar.Split = L.Handler.extend({
         return this;
     },
 
-    closestLayerPoint: function (latlng, layer) {
-        var minDistance = Infinity,
-                          p,
-                          p1,
-                          p2,
-                          minPoint = null,
-                          latlngs = layer.getLatLngs(),
-                          _this = this;
-
-        var project = function(latlng) {
-          return _this._map.project(L.latLng(latlng));
-        };
-
-        p = project(latlng);
-
-        for (var i = 1, len = latlngs.length; i < len; i++) {
-            p1 = project(latlngs[i - 1]);
-            p2 = project(latlngs[i]);
-            var sqDist = L.LineUtil._sqClosestPointOnSegment(p, p1, p2, true);
-            if (sqDist < minDistance) {
-                minDistance = sqDist;
-                minPoint = L.LineUtil._sqClosestPointOnSegment(p, p1, p2);
-                minPoint = _this._map.unproject(minPoint);
-                minPoint.index = i;
-            }
-        }
-        if (minPoint) {
-            minPoint.distance = Math.sqrt(minDistance);
-        }
-        return minPoint;
+    closestLayerPoint: function () {
+        return L.Edit.SegmentVerticesEdit.closestLayerPoint(arguments);
     },
 
 });

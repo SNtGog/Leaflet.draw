@@ -24,6 +24,7 @@ var deps = {
 		src: [
 			'edit/handler/Edit.Marker.js',
 			'edit/handler/Edit.Poly.js',
+			'edit/handler/Edit.Segment.js',
 			'edit/handler/Edit.SimpleShape.js',
 			'edit/handler/Edit.Rectangle.js',
 			'edit/handler/Edit.Circle.js'
@@ -65,6 +66,7 @@ var deps = {
 	EditUI: {
 		src: [
 			'edit/EditToolbar.js',
+			'edit/handler/EditToolbar.Handler.js',
 			'edit/handler/EditToolbar.Edit.js',
 			'edit/handler/EditToolbar.Delete.js',
 			'edit/handler/EditToolbar.Split.js',

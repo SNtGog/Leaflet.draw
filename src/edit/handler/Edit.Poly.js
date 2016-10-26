@@ -45,15 +45,9 @@ L.Edit.Poly = L.Handler.extend({
 	},
 
 	_initHandlers: function () {
-    var handlerClass = L.Edit.PolyVerticesEdit;
-
-		if (this._poly.properties && this._poly.properties.type === 'segment') {
-		  handlerClass = L.Edit.SegmentVerticesEdit;
-		}
-
 		this._verticesHandlers = [];
 		for (var i = 0; i < this.latlngs.length; i++) {
-			this._verticesHandlers.push(new handlerClass(this._poly, this.latlngs[i], this.options));
+			this._verticesHandlers.push(new L.Edit.PolyVerticesEdit(this._poly, this.latlngs[i], this.options));
 		}
 	},
 
@@ -416,107 +410,10 @@ L.Edit.PolyVerticesEdit = L.Handler.extend({
 	}
 });
 
-L.Edit.SegmentVerticesEdit = L.Handler.extend({
-  options: {
-		icon: new L.DivIcon({
-			iconSize: new L.Point(8, 8),
-			className: 'leaflet-div-icon leaflet-editing-icon'
-		}),
-		touchIcon: new L.DivIcon({
-			iconSize: new L.Point(20, 20),
-			className: 'leaflet-div-icon leaflet-editing-icon leaflet-touch-icon'
-		}),
-	},
-
-	initialize: function (poly, latlngs, options) {
-		// if touch, switch to touch icon
-		if (L.Browser.touch) {
-			this.options.icon = this.options.touchIcon;
-		}
-		this._poly = poly;
-
-		if (options && options.drawError) {
-			options.drawError = L.Util.extend({}, this.options.drawError, options.drawError);
-		}
-
-		this._latlngs = latlngs;
-
-		L.setOptions(this, options);
-	},
-
-	addHooks: function () {
-		var poly = this._poly;
-
-		if (!(poly instanceof L.Polygon)) {
-			poly.options.editing.fill = false;
-		}
-
-		poly.setStyle(poly.options.editing);
-
-		if (this._poly._map) {
-
-			this._map = this._poly._map; // Set map
-
-			if (!this._markerGroup) {
-				this._initMarkers();
-			}
-			this._poly._map.addLayer(this._markerGroup);
-		}
-	},
-
-	removeHooks: function () {
-		var poly = this._poly;
-
-		poly.setStyle(poly.options.original);
-
-		if (poly._map) {
-			poly._map.removeLayer(this._markerGroup);
-			delete this._markerGroup;
-			delete this._markers;
-		}
-	},
-
-	updateMarkers: function () {
-		this._markerGroup.clearLayers();
-		this._initMarkers();
-	},
-
-	_initMarkers: function () {
-		if (!this._markerGroup) {
-			this._markerGroup = new L.LayerGroup();
-		}
-		this._markers = [];
-
-		var latlngs = this._latlngs,
-			i, j, len, marker;
-
-		for (i = 0, len = latlngs.length; i < len; i++) {
-
-			marker = this._createMarker(latlngs[i], i);
-			marker.on('click', this._onMarkerClick, this);
-			this._markers.push(marker);
-		}
-
-		var markerLeft, markerRight;
-
-		for (i = 0, j = len - 1; i < len; j = i++) {
-			if (i === 0 && !(L.Polygon && (this._poly instanceof L.Polygon))) {
-				continue;
-			}
-
-			markerLeft = this._markers[j];
-			markerRight = this._markers[i];
-
-			this._createMiddleMarker(markerLeft, markerRight);
-			this._updatePrevNext(markerLeft, markerRight);
-		}
-	},
-});
-
 L.Polyline.addInitHook(function () {
 
 	// Check to see if handler has already been initialized. This is to support versions of Leaflet that still have L.Handler.PolyEdit
-	if (this.editing) {
+	if (this.editing || this instanceof L.Segment) {
 		return;
 	}
 

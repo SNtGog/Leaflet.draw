@@ -1,4 +1,4 @@
-L.EditToolbar.Erase = L.Handler.extend({
+L.EditToolbar.Erase = L.EditToolbar.Handler.extend({
     statics: {
         TYPE: 'erase'
     },
@@ -20,7 +20,7 @@ L.EditToolbar.Erase = L.Handler.extend({
         this._uneditedLayerProps = {};
 
         // Save the type so super can fire, need to do this as cannot do this.TYPE :(
-        this.type = L.EditToolbar.Split.TYPE;
+        this.type = L.EditToolbar.Erase.TYPE;
     },
 
     enable: function () {
@@ -85,31 +85,6 @@ L.EditToolbar.Erase = L.Handler.extend({
         }
     },
 
-    revertLayers: function () {
-        this._featureGroup.eachLayer(function (layer) {
-            this._revertLayer(layer);
-        }, this);
-    },
-
-    _revertLayer: function (layer) {
-        var id = L.Util.stamp(layer);
-        layer.edited = false;
-        layer.deleted = false;
-        if (this._uneditedLayerProps.hasOwnProperty(id)) {
-            // Polyline, Polygon or Rectangle
-            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                layer.setLatLngs(this._uneditedLayerProps[id].latlngs);
-            } else if (layer instanceof L.Circle) {
-                layer.setLatLng(this._uneditedLayerProps[id].latlng);
-                layer.setRadius(this._uneditedLayerProps[id].radius);
-            } else if (layer instanceof L.Marker) { // Marker
-                layer.setLatLng(this._uneditedLayerProps[id].latlng);
-            }
-
-            layer.fire('revert-edited', { layer: layer });
-        }
-    },
-
     save: function () {
         var editedLayers = new L.LayerGroup();
         var deletedLayers = new L.LayerGroup();
@@ -126,47 +101,18 @@ L.EditToolbar.Erase = L.Handler.extend({
                 _this._featureGroup.removeLayer(layer);
                 deletedLayers.addLayer(layer);
                 layer.edited = false;
+	              layer.fire('deleted', layer);
             }
         });
         this._map.fire('draw:edited', {layers: editedLayers});
         this._map.fire('draw:deleted', {layers: deletedLayers});
     },
 
-    _backupLayer: function (layer) {
-        var id = L.Util.stamp(layer);
-
-        if (!this._uneditedLayerProps[id]) {
-            // Polyline, Polygon or Rectangle
-            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                this._uneditedLayerProps[id] = {
-                    latlngs: L.LatLngUtil.cloneLatLngs(layer.getLatLngs())
-                };
-            } else if (layer instanceof L.Circle) {
-                this._uneditedLayerProps[id] = {
-                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng()),
-                    radius: layer.getRadius()
-                };
-            } else if (layer instanceof L.Marker) { // Marker
-                this._uneditedLayerProps[id] = {
-                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng())
-                };
-            }
-        }
-    },
-
     _getTooltipText: function () {
         return ({
-            text: L.drawLocal.edit.handlers.split.tooltip.text,
-            subtext: L.drawLocal.edit.handlers.split.tooltip.subtext
+            text: L.drawLocal.edit.handlers.erase.tooltip.text,
+            subtext: L.drawLocal.edit.handlers.erase.tooltip.subtext
         });
-    },
-
-    _updateTooltip: function () {
-        this._tooltip.updateContent(this._getTooltipText());
-    },
-
-    _hasAvailableLayers: function () {
-        return this._featureGroup.getLayers().length > 0;
     },
 
     _onMouseMove: function (e) {

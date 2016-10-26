@@ -87,6 +87,9 @@ L.EditToolbar.Delete = L.Handler.extend({
 	},
 
 	save: function () {
+	  this._deletedLayers.eachLayer(function(layer) {
+	    layer.fire('deleted', layer);
+	  });
 		this._map.fire('draw:deleted', { layers: this._deletedLayers });
 	},
 
