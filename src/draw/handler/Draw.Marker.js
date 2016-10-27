@@ -37,6 +37,8 @@ L.Draw.Marker = L.Draw.Feature.extend({
 
 			this._mouseMarker
 				.on('click', this._onClick, this)
+				.on('mousedown', this._onMouseDown, this)
+				.on('contextmenu', this._onContextMenu, this)
 				.addTo(this._map);
 
 			this._map.on('mousemove', this._onMouseMove, this);
@@ -49,7 +51,11 @@ L.Draw.Marker = L.Draw.Feature.extend({
 
 		if (this._map) {
 			if (this._marker) {
-				this._marker.off('click', this._onClick, this);
+				this._marker
+				  .off('click', this._onClick, this)
+				  .off('mousedown', this._onMouseDown, this)
+				  .off('contextmenu', this._onContextMenu, this);
+
 				this._map
 					.off('click', this._onClick, this)
 					.off('click', this._onTouch, this)
@@ -106,5 +112,16 @@ L.Draw.Marker = L.Draw.Feature.extend({
 	_fireCreatedEvent: function () {
 		var marker = new L.Marker.Touch(this._marker.getLatLng(), { icon: this.options.icon });
 		L.Draw.Feature.prototype._fireCreatedEvent.call(this, marker);
+	},
+
+	_onMouseDown: function(e) {
+	  if (e.originalEvent.button === 2) {
+	    return;
+	  }
+	},
+
+	_onContextMenu: function(e) {
+	  e.originalEvent.preventDefault();
 	}
+
 });

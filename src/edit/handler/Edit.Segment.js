@@ -26,10 +26,14 @@ L.Edit.Segment = L.Handler.extend({
 
 	addHooks: function () {
 	  var _this = this;
-	  if (this._poly.properties && this._poly.properties.track) {
-		  var trackId = this._poly.properties.track;
-      this._poly._map.eachLayer(function(layer) {
-        if (layer.properties && layer.properties.id === trackId) {
+	  if (this._poly.properties) {
+		  var trackId = this._poly.properties.track || this._poly.properties.track_cid;
+
+      this._poly._map.drawnItems.eachLayer(function(layer) {
+        if (!layer.properties) {return;}
+        var id = layer.properties.id || layer.properties.cid;
+
+        if (id && id === trackId) {
           _this._poly._track = layer;
         }
       });
@@ -301,8 +305,8 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
     for (var i = 0; i < length; i++) {
       if (splitPoints[i]._dragging) {
         splitPoint = splitPoints[i];
+        break;
       }
-      break;
     }
 
     if (!splitPoint || !this._poly._track) {

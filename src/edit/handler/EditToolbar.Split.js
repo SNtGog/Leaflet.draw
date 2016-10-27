@@ -102,7 +102,8 @@ L.EditToolbar.Split = L.EditToolbar.Handler.extend({
             if (layer.edited) {
                 editedLayers.addLayer(layer);
                 layer.edited = false;
-                layer.properties = layer.properties || {};{ type: 'segment'};
+                layer.properties = layer.properties || {};
+                layer.properties.type = 'segment';
             }
         });
         this._map.fire('draw:splitted', {layers: editedLayers});
@@ -199,7 +200,10 @@ L.EditToolbar.Split = L.EditToolbar.Handler.extend({
 
             layer = this._firstSplitPoint.layer;
             if (layer && layer.properties) {
-                templine.properties = {track: layer.properties.id};
+                templine.properties = {
+                  track: layer.properties.id,
+                  track_cid: layer.properties.cid
+                 };
             }
 
             this._addTempLine(templine);
@@ -334,7 +338,7 @@ L.EditToolbar.Split = L.EditToolbar.Handler.extend({
     },
 
     closestLayerPoint: function () {
-        return L.Edit.SegmentVerticesEdit.closestLayerPoint(arguments);
+        return L.Edit.SegmentVerticesEdit.prototype.closestLayerPoint.apply(this,arguments);
     },
 
 });

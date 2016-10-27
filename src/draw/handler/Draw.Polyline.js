@@ -97,6 +97,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 				.on('mouseout', this._onMouseOut, this)
 				.on('mouseup', this._onMouseUp, this) // Necessary for 0.8 compatibility
 				.on('mousemove', this._onMouseMove, this) // Necessary to prevent 0.8 stutter
+				.on('contextmenu', this._onContextMenu, this)
 				.addTo(this._map);
 
 			this._map
@@ -135,6 +136,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 			.off('mousedown', this._onMouseDown, this)
 			.off('mouseout', this._onMouseOut, this)
 			.off('mouseup', this._onMouseUp, this)
+			.off('contextmenu', this._onContextMenu, this)
 			.off('mousemove', this._onMouseMove, this);
 		this._map.removeLayer(this._mouseMarker);
 		delete this._mouseMarker;
@@ -274,11 +276,17 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_onMouseDown: function (e) {
+	  if (e.originalEvent.button === 2) {
+	    return;
+	  }
 		var originalEvent = e.originalEvent;
 		this._mouseDownOrigin = L.point(originalEvent.clientX, originalEvent.clientY);
 	},
 
 	_onMouseUp: function (e) {
+	  if (e.originalEvent.button === 2) {
+	    return;
+	  }
 		if (this._mouseDownOrigin) {
 			// We detect clicks within a certain tolerance, otherwise let it
 			// be interpreted as a drag by the map
@@ -303,6 +311,10 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		if (this._tooltip) {
 			this._tooltip._onMouseOut.call(this._tooltip);
 		}
+	},
+
+	_onContextMenu: function(e) {
+	  e.originalEvent.preventDefault();
 	},
 
 	_updateFinishHandler: function () {

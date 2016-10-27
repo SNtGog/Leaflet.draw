@@ -305,6 +305,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 				.on('mouseout', this._onMouseOut, this)
 				.on('mouseup', this._onMouseUp, this) // Necessary for 0.8 compatibility
 				.on('mousemove', this._onMouseMove, this) // Necessary to prevent 0.8 stutter
+				.on('contextmenu', this._onContextMenu, this)
 				.addTo(this._map);
 
 			this._map
@@ -343,6 +344,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 			.off('mousedown', this._onMouseDown, this)
 			.off('mouseout', this._onMouseOut, this)
 			.off('mouseup', this._onMouseUp, this)
+			.off('contextmenu', this._onContextMenu, this)
 			.off('mousemove', this._onMouseMove, this);
 		this._map.removeLayer(this._mouseMarker);
 		delete this._mouseMarker;
@@ -482,11 +484,17 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_onMouseDown: function (e) {
+	  if (e.originalEvent.button === 2) {
+	    return;
+	  }
 		var originalEvent = e.originalEvent;
 		this._mouseDownOrigin = L.point(originalEvent.clientX, originalEvent.clientY);
 	},
 
 	_onMouseUp: function (e) {
+	  if (e.originalEvent.button === 2) {
+	    return;
+	  }
 		if (this._mouseDownOrigin) {
 			// We detect clicks within a certain tolerance, otherwise let it
 			// be interpreted as a drag by the map
@@ -511,6 +519,10 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		if (this._tooltip) {
 			this._tooltip._onMouseOut.call(this._tooltip);
 		}
+	},
+
+	_onContextMenu: function(e) {
+	  e.originalEvent.preventDefault();
 	},
 
 	_updateFinishHandler: function () {
@@ -1278,6 +1290,8 @@ L.Draw.Marker = L.Draw.Feature.extend({
 
 			this._mouseMarker
 				.on('click', this._onClick, this)
+				.on('mousedown', this._onMouseDown, this)
+				.on('contextmenu', this._onContextMenu, this)
 				.addTo(this._map);
 
 			this._map.on('mousemove', this._onMouseMove, this);
@@ -1290,7 +1304,11 @@ L.Draw.Marker = L.Draw.Feature.extend({
 
 		if (this._map) {
 			if (this._marker) {
-				this._marker.off('click', this._onClick, this);
+				this._marker
+				  .off('click', this._onClick, this)
+				  .off('mousedown', this._onMouseDown, this)
+				  .off('contextmenu', this._onContextMenu, this);
+
 				this._map
 					.off('click', this._onClick, this)
 					.off('click', this._onTouch, this)
@@ -1347,7 +1365,18 @@ L.Draw.Marker = L.Draw.Feature.extend({
 	_fireCreatedEvent: function () {
 		var marker = new L.Marker.Touch(this._marker.getLatLng(), { icon: this.options.icon });
 		L.Draw.Feature.prototype._fireCreatedEvent.call(this, marker);
+	},
+
+	_onMouseDown: function(e) {
+	  if (e.originalEvent.button === 2) {
+	    return;
+	  }
+	},
+
+	_onContextMenu: function(e) {
+	  e.originalEvent.preventDefault();
 	}
+
 });
 
 
@@ -1897,10 +1926,14 @@ L.Edit.Segment = L.Handler.extend({
 
 	addHooks: function () {
 	  var _this = this;
-	  if (this._poly.properties && this._poly.properties.track) {
-		  var trackId = this._poly.properties.track;
-      this._poly._map.eachLayer(function(layer) {
-        if (layer.properties && layer.properties.id === trackId) {
+	  if (this._poly.properties) {
+		  var trackId = this._poly.properties.track || this._poly.properties.track_cid;
+
+      this._poly._map.drawnItems.eachLayer(function(layer) {
+        if (!layer.properties) {return;}
+        var id = layer.properties.id || layer.properties.cid;
+
+        if (id && id === trackId) {
           _this._poly._track = layer;
         }
       });
@@ -2172,8 +2205,8 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
     for (var i = 0; i < length; i++) {
       if (splitPoints[i]._dragging) {
         splitPoint = splitPoints[i];
+        break;
       }
-      break;
     }
 
     if (!splitPoint || !this._poly._track) {
@@ -4417,7 +4450,8 @@ L.EditToolbar.Split = L.EditToolbar.Handler.extend({
             if (layer.edited) {
                 editedLayers.addLayer(layer);
                 layer.edited = false;
-                layer.properties = layer.properties || {};{ type: 'segment'};
+                layer.properties = layer.properties || {};
+                layer.properties.type = 'segment';
             }
         });
         this._map.fire('draw:splitted', {layers: editedLayers});
@@ -4514,7 +4548,10 @@ L.EditToolbar.Split = L.EditToolbar.Handler.extend({
 
             layer = this._firstSplitPoint.layer;
             if (layer && layer.properties) {
-                templine.properties = {track: layer.properties.id};
+                templine.properties = {
+                  track: layer.properties.id,
+                  track_cid: layer.properties.cid
+                 };
             }
 
             this._addTempLine(templine);
@@ -4649,7 +4686,7 @@ L.EditToolbar.Split = L.EditToolbar.Handler.extend({
     },
 
     closestLayerPoint: function () {
-        return L.Edit.SegmentVerticesEdit.closestLayerPoint(arguments);
+        return L.Edit.SegmentVerticesEdit.prototype.closestLayerPoint.apply(this,arguments);
     },
 
 });
