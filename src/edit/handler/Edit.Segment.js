@@ -164,16 +164,16 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 	},
 
 	_drawSplitPoints: function() {
-	  var latlngs = this._poly.getLatLngs();
+        var latlngs = this._poly.getLatLngs();
 
-	this._removeSplitPoints();
+        this._removeSplitPoints();
 
-	  this._splitPoints = [
-		this._drawSplitPoint(latlngs[0]),
-		this._drawSplitPoint(latlngs[latlngs.length-1])
-	  ];
+        this._splitPoints = [
+            this._drawSplitPoint(latlngs[0]),
+            this._drawSplitPoint(latlngs[latlngs.length-1])
+        ];
 
-	  return this;
+        return this;
 	},
 
 	_removeSplitPoints: function() {

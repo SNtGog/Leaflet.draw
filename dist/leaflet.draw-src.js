@@ -841,9 +841,9 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		});
 	},
 
-	_appendPoints: function(points) {
-			for (var i=0; i<points.length;i++) {
-				this.addVertex(L.latLng(points[i].reverse()));
+	_appendLatlngs: function(latlngs) {
+			for (var i=0; i<latlngs.length;i++) {
+				this.addVertex(latlngs[i]);
 			}
 	},
 
@@ -855,9 +855,9 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 
 		this._map.fireEvent('request:route', {
 			latLngs: latLngs,
-			callback: function(points) {
-				points.splice(0,1);
-				_this._appendPoints(points);
+			callback: function(latlngs) {
+				latlngs.splice(0,1);
+				_this._appendLatlngs(latlngs);
 			}
 		});
 	},
@@ -906,9 +906,9 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		if (e.originalEvent.originalEvent.ctrlKey) {
 			this._map.fireEvent('request:route', {
 				latLngs: [_latLngs[_latLngs.length-1], e.latlng],
-				callback: function(points) {
-					if (points.length > 3) {
-						_this._appendPoints(points.splice(1,points.length - 2));
+				callback: function(latlngs) {
+					if (latlngs.length > 3) {
+						_this._appendLatlngs(latlngs.splice(1,latlngs.length - 2));
 					}
 					continuePolyline(_this, latLngsToAdd, finishShape);
 				}
@@ -2182,16 +2182,16 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 	},
 
 	_drawSplitPoints: function() {
-	  var latlngs = this._poly.getLatLngs();
+        var latlngs = this._poly.getLatLngs();
 
-	this._removeSplitPoints();
+        this._removeSplitPoints();
 
-	  this._splitPoints = [
-		this._drawSplitPoint(latlngs[0]),
-		this._drawSplitPoint(latlngs[latlngs.length-1])
-	  ];
+        this._splitPoints = [
+            this._drawSplitPoint(latlngs[0]),
+            this._drawSplitPoint(latlngs[latlngs.length-1])
+        ];
 
-	  return this;
+        return this;
 	},
 
 	_removeSplitPoints: function() {
