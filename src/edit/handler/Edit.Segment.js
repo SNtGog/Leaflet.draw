@@ -3,8 +3,6 @@ L.Edit = L.Edit || {};
 L.Edit.Segment = L.Handler.extend({
 	options: {},
 
-	options: {},
-
 	initialize: function (poly, options) {
 
 		this.latlngs = [poly._latlngs];
@@ -25,18 +23,18 @@ L.Edit.Segment = L.Handler.extend({
 	},
 
 	addHooks: function () {
-	  var _this = this;
-	  if (this._poly.properties) {
-		  var trackId = this._poly.properties.track || this._poly.properties.track_cid;
+		var _this = this;
+		if (this._poly.properties) {
+			var trackId = this._poly.properties.track || this._poly.properties.track_cid;
 
-      this._poly._map.drawnItems.eachLayer(function(layer) {
-        if (!layer.properties) {return;}
-        var id = layer.properties.id || layer.properties.cid;
+			this._poly._map.eachLayer(function(layer) {
+				if (!layer.properties) {return;}
+				var id = layer.properties.id || layer.properties.cid;
 
-        if (id && id === trackId) {
-          _this._poly._track = layer;
-        }
-      });
+				if (id && id === trackId) {
+				  _this._poly._track = layer;
+				}
+			});
 		}
 
 		this._initHandlers();
@@ -72,18 +70,18 @@ L.Edit.Segment = L.Handler.extend({
 	},
 
 	_onTrackDelete: function() {
-	  this.removeHooks();
-	  this._map.removeLayer(this._poly);
+		this.removeHooks();
+		this._map.removeLayer(this._poly);
 
-	  var layers = new L.LayerGroup();
-	  this._poly.addTo(layers);
-	  this._map.fire('draw:deleted', { layers: layers });
+		var layers = new L.LayerGroup();
+		this._poly.addTo(layers);
+		this._map.fire('draw:deleted', { layers: layers });
 	}
 
 });
 
 L.Edit.SegmentVerticesEdit = L.Handler.extend({
-  options: {
+	options: {
 		icon: new L.DivIcon({
 			iconSize: new L.Point(8, 8),
 			className: 'leaflet-div-icon leaflet-editing-icon'
@@ -123,11 +121,11 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 		if (this._poly._map) {
 
 			this._map = this._poly._map; // Set map
-      this._drawSplitPoints();
+			this._drawSplitPoints();
 			this._map
-        .on('zoomend', this._onZoomEnd, this)
-        .on('mousemove', this._onSplitpointMousemove, this)
-        .on('mouseup', this._onMouseUp, this);
+			  .on('zoomend', this._onZoomEnd, this)
+			  .on('mousemove', this._onSplitpointMousemove, this)
+			  .on('mouseup', this._onMouseUp, this);
 		}
 	},
 
@@ -137,45 +135,42 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 		poly.setStyle(poly.options.original);
 
 		if (poly._map) {
-		  this._poly._map
-        .off('zoomend', this._onZoomEnd, this)
-        .off('mousemove', this._onSplitpointMousemove, this)
-        .off('mouseup', this._onMouseUp, this);
+			this._poly._map
+			  .off('zoomend', this._onZoomEnd, this)
+			  .off('mousemove', this._onSplitpointMousemove, this)
+			  .off('mouseup', this._onMouseUp, this);
 
-      this._removeSplitPoints();
-
-//			poly._map.removeLayer(this._markerGroup);
-//			delete this._markerGroup;
+			this._removeSplitPoints();
 		}
 	},
 
 	_onZoomEnd: function(e) {
-	  this._moveSplitPoints();
+		this._moveSplitPoints();
 	},
 
 	_onMouseUp: function(e) {
-	  for (var i = 0; i < this._splitPoints.length; i++) {
-	    this._splitPoints[i]._dragging = false;
-	  }
+		for (var i = 0; i < this._splitPoints.length; i++) {
+		  this._splitPoints[i]._dragging = false;
+		}
 	},
 
 	_moveSplitPoints: function(e) {
-	  var splitPoints = this._splitPoints,
-	      length = this._splitPoints.length;
+		var splitPoints = this._splitPoints,
+			length = this._splitPoints.length;
 
-	  for (var i = 0; i < length; i++) {
-	    this._moveSplitPoint(splitPoints[i], null);
-	  }
+		for (var i = 0; i < length; i++) {
+			this._moveSplitPoint(splitPoints[i], null);
+		}
 	},
 
 	_drawSplitPoints: function() {
 	  var latlngs = this._poly.getLatLngs();
 
-    this._removeSplitPoints();
+	this._removeSplitPoints();
 
 	  this._splitPoints = [
-	    this._drawSplitPoint(latlngs[0]),
-	    this._drawSplitPoint(latlngs[latlngs.length-1])
+		this._drawSplitPoint(latlngs[0]),
+		this._drawSplitPoint(latlngs[latlngs.length-1])
 	  ];
 
 	  return this;
@@ -184,162 +179,161 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 	_removeSplitPoints: function() {
 	  var splitPoints = this._splitPoints || [];
 	  for (var i = 0; i < splitPoints.length; i++) {
-	    this._removeSplitPoint(splitPoints[i]);
+		this._removeSplitPoint(splitPoints[i]);
 	  }
 	  this._splitPoints = [];
 	},
 
 	_removeSplitPoint: function(splitPoint) {
-	    var vertices = splitPoint.vertices,
-	        length = vertices.length;
+		var vertices = splitPoint.vertices,
+			length = vertices.length;
 
-	    for (var i = 0; i < length; i++) {
-	      this._map._pathRoot.removeChild(vertices[i]);
-	    }
+		for (var i = 0; i < length; i++) {
+		  this._map._pathRoot.removeChild(vertices[i]);
+		}
 	},
 
 	_drawSplitPoint: function (latlng) {
-    var controlVertex = this._createVertex(latlng, 8, '#ffffff'),
-        vertices = [
-          this._createVertex(latlng, 10, '#00ff00'),
-          controlVertex
-        ];
+		var controlVertex = this._createVertex(latlng, 8, '#ffffff'),
+			vertices = [
+			  this._createVertex(latlng, 10, '#00ff00'),
+			  controlVertex
+			];
 
-    for (var i = 0; i < vertices.length; i++) {
-      this._map._pathRoot.appendChild(vertices[i]);
-    }
+		for (var i = 0; i < vertices.length; i++) {
+		  this._map._pathRoot.appendChild(vertices[i]);
+		}
 
-    var closest,
-        index = 0;
+		var closest,
+			index = 0;
 
-    if (this._poly._track) {
-      closest = this.closestLayerPoint(latlng, this._poly._track);
-      index = closest.index;
-    }
+		if (this._poly._track) {
+		  closest = this.closestLayerPoint(latlng, this._poly._track);
+		  index = closest.index;
+		}
 
-    var splitPoint = {
-      latlng: latlng,
-      vertices: vertices,
-      index: index
-    };
+		var splitPoint = {
+		  latlng: latlng,
+		  vertices: vertices,
+		  index: index
+		};
 
-    this._addSplitPointHooks(controlVertex, splitPoint);
-    return splitPoint;
-  },
+		this._addSplitPointHooks(controlVertex, splitPoint);
+		return splitPoint;
+	},
 
-  _createVertex: function(latlng, radius, color) {
-    var namespace = 'http://www.w3.org/2000/svg',
-        point = this._map.latLngToLayerPoint(latlng),
-        vertex;
+	_createVertex: function(latlng, radius, color) {
+		var namespace = 'http://www.w3.org/2000/svg',
+			point = this._map.latLngToLayerPoint(latlng),
+			vertex;
 
-    vertex = document.createElementNS(namespace, 'circle');
-    vertex.setAttributeNS(null, 'r', radius);
-    vertex.setAttributeNS(null, 'cx', point.x);
-    vertex.setAttributeNS(null, 'cy', point.y);
-    vertex.setAttributeNS(null, 'fill', color);
-    vertex.setAttributeNS(null, 'fill-opacity', this._poly.options.opacity);
-    return vertex;
-  },
+		vertex = document.createElementNS(namespace, 'circle');
+		vertex.setAttributeNS(null, 'r', radius);
+		vertex.setAttributeNS(null, 'cx', point.x);
+		vertex.setAttributeNS(null, 'cy', point.y);
+		vertex.setAttributeNS(null, 'fill', color);
+		vertex.setAttributeNS(null, 'fill-opacity', this._poly.options.opacity);
+		return vertex;
+	},
 
-  _addSplitPointHooks: function(vertex, splitPoint) {
-    var _this = this;
-    vertex.className.baseVal = 'splitpoint';
+	_addSplitPointHooks: function(vertex, splitPoint) {
+		var _this = this;
+		vertex.className.baseVal = 'splitpoint';
 
-    vertex.onmouseover = function(e) {
-      _this._onSplitpointMouseover(e);
-    };
-    vertex.onmouseout = function(e) {
-      _this._onSplitpointMouseout(e, splitPoint);
-    };
-    vertex.onmousedown = function(e) {
-      _this._onSplitpointMousedown(e, splitPoint);
-    };
-    vertex.onmouseup = function(e) {
-      _this._onSplitpointMouseup(e, splitPoint);
-    };
-  },
+		vertex.onmouseover = function(e) {
+		  _this._onSplitpointMouseover(e);
+		};
+		vertex.onmouseout = function(e) {
+		  _this._onSplitpointMouseout(e, splitPoint);
+		};
+		vertex.onmousedown = function(e) {
+		  _this._onSplitpointMousedown(e, splitPoint);
+		};
+		vertex.onmouseup = function(e) {
+		  _this._onSplitpointMouseup(e, splitPoint);
+		};
+	},
 
-  _eachSplitVertex: function(callback) {
-    var splitPoints = this._splitPoints;
-    for (var i = 0; i < splitPoints.length; i++) {
-      var vertices = splitPoints[i].vertices;
-      for (var j = 0; j < vertices.length; j++) {
-        if (vertices[j].className.baseVal === 'splitpoint') {
-          callback(vertices[j]);
-        }
-      }
-    }
-  },
+	_eachSplitVertex: function(callback) {
+		var splitPoints = this._splitPoints;
+		for (var i = 0; i < splitPoints.length; i++) {
+			var vertices = splitPoints[i].vertices;
+			for (var j = 0; j < vertices.length; j++) {
+			  if (vertices[j].className.baseVal === 'splitpoint') {
+				callback(vertices[j]);
+			  }
+		  }
+		}
+	},
 
-  _onSplitpointMouseover: function() {
-    this._map.dragging.disable();
-    this._eachSplitVertex(function(vertex) {
-      vertex.setAttribute('fill', '#C9C9C9', '');
-    });
+	_onSplitpointMouseover: function() {
+		this._map.dragging.disable();
+		this._eachSplitVertex(function(vertex) {
+			vertex.setAttribute('fill', '#C9C9C9', '');
+		});
 
-    this._poly.setStyle({color: '#C9C9C9'});
-  },
+		this._poly.setStyle({color: '#C9C9C9'});
+	},
 
-  _onSplitpointMouseout: function(e, splitPoint) {
-    this._map.dragging.enable();
-//    splitPoint._dragging = false;
-    this._eachSplitVertex(function(vertex) {
-      vertex.setAttribute('fill', '#ffffff', '');
-    });
-    this._poly.setStyle({color: this._polyColor});
-  },
+	_onSplitpointMouseout: function(e, splitPoint) {
+		this._map.dragging.enable();
+		this._eachSplitVertex(function(vertex) {
+			vertex.setAttribute('fill', '#ffffff', '');
+		});
+		this._poly.setStyle({color: this._polyColor});
+	},
 
-  _onSplitpointMousedown: function(e, splitPoint) {
-    splitPoint._dragging = true;
-  },
+	_onSplitpointMousedown: function(e, splitPoint) {
+		splitPoint._dragging = true;
+	},
 
-  _onSplitpointMouseup: function(e, splitPoint) {
-    splitPoint._dragging = false;
-  },
+	_onSplitpointMouseup: function(e, splitPoint) {
+		splitPoint._dragging = false;
+	},
 
-  _onSplitpointMousemove: function(e) {
-    var splitPoint,
-        splitPoints = this._splitPoints,
-        length = splitPoints.length;
+	_onSplitpointMousemove: function(e) {
+		var splitPoint,
+			splitPoints = this._splitPoints,
+			length = splitPoints.length;
 
-    for (var i = 0; i < length; i++) {
-      if (splitPoints[i]._dragging) {
-        splitPoint = splitPoints[i];
-        break;
-      }
-    }
+		for (var i = 0; i < length; i++) {
+			if (splitPoints[i]._dragging) {
+				splitPoint = splitPoints[i];
+				break;
+			}
+		}
 
-    if (!splitPoint || !this._poly._track) {
-      return;
-    }
-    var latlng = e.latlng,
-      latlngs = [],
-      closest;
+		if (!splitPoint || !this._poly._track) {
+		  return;
+		}
+		var latlng = e.latlng,
+			latlngs = [],
+			closest;
 
-    this._poly.edited = true;
-    closest = this.closestLayerPoint(latlng, this._poly._track);
-    splitPoint.index = closest.index;
-    this._moveSplitPoint(splitPoint, closest);
+		this._poly.edited = true;
+		closest = this.closestLayerPoint(latlng, this._poly._track);
+		splitPoint.index = closest.index;
+		this._moveSplitPoint(splitPoint, closest);
 
-    var start = this._splitPoints[0],
-        end = this._splitPoints[1];
+		var start = this._splitPoints[0],
+			end = this._splitPoints[1];
 
-    latlngs = this._splitTrack(start, end);
-    this._poly.setLatLngs(latlngs);
-  },
+		latlngs = this._splitTrack(start, end);
+		this._poly.setLatLngs(latlngs);
+	},
 
-  _moveSplitPoint: function(splitPoint, latlng) {
-    var _latlng = latlng || splitPoint.latlng,
-        vertices = splitPoint.vertices,
-        length = vertices.length,
-        point = this._map.latLngToLayerPoint(_latlng);
+	_moveSplitPoint: function(splitPoint, latlng) {
+		var _latlng = latlng || splitPoint.latlng,
+			vertices = splitPoint.vertices,
+			length = vertices.length,
+			point = this._map.latLngToLayerPoint(_latlng);
 
-    splitPoint.latlng = _latlng;
-    for (var i = 0; i < length; i++) {
-      vertices[i].setAttributeNS(null, 'cx', point.x);
-      vertices[i].setAttributeNS(null, 'cy', point.y);
-    }
-  },
+		splitPoint.latlng = _latlng;
+		for (var i = 0; i < length; i++) {
+			vertices[i].setAttributeNS(null, 'cx', point.x);
+			vertices[i].setAttributeNS(null, 'cy', point.y);
+		}
+	},
 
 	_createMarker: function (latlng) {
 		var marker = new L.Marker(latlng, {
@@ -349,13 +343,13 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 		marker._origLatLng = latlng;
 
 		marker
-			.on('dragstart', this._onMarkerDragStart, this)
-			.on('drag', this._onMarkerDrag, this)
-			.on('dragend', this._fireEdit, this)
-			.on('touchmove', this._onTouchMove, this)
-			.on('MSPointerMove', this._onTouchMove, this)
-			.on('touchend', this._fireEdit, this)
-			.on('MSPointerUp', this._fireEdit, this);
+		  .on('dragstart', this._onMarkerDragStart, this)
+		  .on('drag', this._onMarkerDrag, this)
+		  .on('dragend', this._fireEdit, this)
+		  .on('touchmove', this._onTouchMove, this)
+		  .on('MSPointerMove', this._onTouchMove, this)
+		  .on('touchend', this._fireEdit, this)
+		  .on('MSPointerUp', this._fireEdit, this);
 
 		this._markerGroup.addLayer(marker);
 
@@ -375,13 +369,13 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 		this._updateIndexes(i, -1);
 
 		marker
-			.off('dragstart', this._onMarkerDragStart, this)
-			.off('drag', this._onMarkerDrag, this)
-			.off('dragend', this._fireEdit, this)
-			.off('touchmove', this._onMarkerDrag, this)
-			.off('touchend', this._fireEdit, this)
-			.off('MSPointerMove', this._onTouchMove, this)
-			.off('MSPointerUp', this._fireEdit, this);
+		  .off('dragstart', this._onMarkerDragStart, this)
+		  .off('drag', this._onMarkerDrag, this)
+		  .off('dragend', this._fireEdit, this)
+		  .off('touchmove', this._onMarkerDrag, this)
+		  .off('touchend', this._fireEdit, this)
+		  .off('MSPointerMove', this._onTouchMove, this)
+		  .off('MSPointerUp', this._fireEdit, this);
 	},
 
 	_fireEdit: function () {
@@ -412,62 +406,62 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 	},
 
 	closestLayerPoint: function (latlng, layer) {
-      var minDistance = Infinity,
-                        p,
-                        p1,
-                        p2,
-                        minPoint = null,
-                        latlngs = layer.getLatLngs(),
-                        _this = this;
+		var minDistance = Infinity,
+						  p,
+						  p1,
+						  p2,
+						  minPoint = null,
+						  latlngs = layer.getLatLngs(),
+						  _this = this;
 
-      var project = function(latlng) {
-        return _this._map.project(L.latLng(latlng));
-      };
+		var project = function(latlng) {
+		  return _this._map.project(L.latLng(latlng));
+		};
 
-      p = project(latlng);
+		p = project(latlng);
 
-      for (var i = 1, len = latlngs.length; i < len; i++) {
-          p1 = project(latlngs[i - 1]);
-          p2 = project(latlngs[i]);
-          var sqDist = L.LineUtil._sqClosestPointOnSegment(p, p1, p2, true);
-          if (sqDist < minDistance) {
-              minDistance = sqDist;
-              minPoint = L.LineUtil._sqClosestPointOnSegment(p, p1, p2);
-              minPoint = _this._map.unproject(minPoint);
-              minPoint.index = i;
-          }
-      }
-      if (minPoint) {
-          minPoint.distance = Math.sqrt(minDistance);
-      }
-      return minPoint;
-  },
+		for (var i = 1, len = latlngs.length; i < len; i++) {
+			p1 = project(latlngs[i - 1]);
+			p2 = project(latlngs[i]);
+			var sqDist = L.LineUtil._sqClosestPointOnSegment(p, p1, p2, true);
+			if (sqDist < minDistance) {
+				minDistance = sqDist;
+				minPoint = L.LineUtil._sqClosestPointOnSegment(p, p1, p2);
+				minPoint = _this._map.unproject(minPoint);
+				minPoint.index = i;
+			}
+		}
+		if (minPoint) {
+			minPoint.distance = Math.sqrt(minDistance);
+		}
+		return minPoint;
+	},
 
-  _splitTrack: function (start, end) {
-        var track = this._poly._track,
-            startIndex = start.index,
-            endIndex = end.index,
-            trackLatLngs = [],
-            firstPoint = start.latlng,
-            endPoint = end.latlng,
-            latlngs = [];
+	_splitTrack: function (start, end) {
+		var track = this._poly._track,
+			startIndex = start.index,
+			endIndex = end.index,
+			trackLatLngs = [],
+			firstPoint = start.latlng,
+			endPoint = end.latlng,
+			latlngs = [];
 
-        if (startIndex > endIndex) {
-            startIndex = startIndex + endIndex;
-            endIndex = startIndex - endIndex;
-            startIndex = startIndex - endIndex;
-            firstPoint = end;
-            endPoint = start;
-        }
-        latlngs.push(firstPoint);
+		if (startIndex > endIndex) {
+			startIndex = startIndex + endIndex;
+			endIndex = startIndex - endIndex;
+			startIndex = startIndex - endIndex;
+			firstPoint = end;
+			endPoint = start;
+		}
+		latlngs.push(firstPoint);
 
-        trackLatLngs = track.getLatLngs().slice(startIndex, endIndex);
-        latlngs = latlngs.concat(trackLatLngs);
-        latlngs.push(endPoint);
+		trackLatLngs = track.getLatLngs().slice(startIndex, endIndex);
+		latlngs = latlngs.concat(trackLatLngs);
+		latlngs.push(endPoint);
 
-        return latlngs;
+		return latlngs;
 
-    },
+	},
 
 
 });

@@ -251,6 +251,8 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 			this.options.icon = this.options.touchIcon;
 		}
 
+		this._featureGroup = options.featureGroup;
+
 		// Need to set this here to ensure the correct message is used.
 		this.options.drawError.message = L.drawLocal.draw.handlers.polyline.error;
 
@@ -267,6 +269,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	addHooks: function () {
+		var _this = this;
 		L.Draw.Feature.prototype.addHooks.call(this);
 		if (this._map) {
 			this._markers = [];
@@ -297,7 +300,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 
 			if (this.options.canContinue === true) {
 				this._hiddenPoly = null;
-				this._map.drawnItems.eachLayer(this._addContinueHandler, this);
+				this._featureGroup.eachLayer(this._addContinueHandler, this);
 			}
 
 			this._mouseMarker
@@ -314,6 +317,13 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 				.on('zoomlevelschange', this._onZoomEnd, this)
 				.on('click', this._onTouch, this)
 				.on('zoomend', this._onZoomEnd, this);
+
+			this._featureGroup.eachLayer(function(layer) {
+				if (layer instanceof L.Marker) {
+					layer.setZIndexOffset(5000);
+					_this._addMarkerHooks(layer);
+				}
+			});
 		}
 
 		this._eachContinueHandler(function (handler) {
@@ -322,8 +332,9 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	removeHooks: function () {
+		var _this = this;
 		if (this._hiddenPoly) {
-			this._map.drawnItems.addLayer(this._hiddenPoly);
+			this._featureGroup.addLayer(this._hiddenPoly);
 		}
 
 		L.Draw.Feature.prototype.removeHooks.call(this);
@@ -355,11 +366,31 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		this._map
 			.off('mouseup', this._onMouseUp, this)
 			.off('mousemove', this._onMouseMove, this)
-			.off('mouseup', this._onMouseUp, this)
 			.off('zoomend', this._onZoomEnd, this)
 			.off('click', this._onTouch, this);
 
+		this._featureGroup.eachLayer(function(layer) {
+				if (layer instanceof L.Marker) {
+					layer.setZIndexOffset(0);
+					_this._removeMarkerHooks(layer);
+				}
+			});
+
 		this._removeContinueHandlers();
+	},
+
+	_addMarkerHooks: function(marker) {
+		marker
+			.on('mouseover', this._onMarkerMouseOver, this)
+			.on('mouseout', this._onMarkerMouseOut, this)
+			.on('click', this._onMarkerClick, this);
+	},
+
+	_removeMarkerHooks: function(marker) {
+		marker
+			.off('mouseover', this._onMarkerMouseOver, this)
+			.off('mouseout', this._onMarkerMouseOut, this)
+			.off('click', this._onMarkerClick, this);
 	},
 
 	deleteLastVertex: function () {
@@ -432,7 +463,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 				delete hidden.reversed;
 			}
 			this._hiddenPoly.setLatLngs(latlngs);
-			this._map.drawnItems.addLayer(this._hiddenPoly);
+			this._featureGroup.addLayer(this._hiddenPoly);
 		}
 
 		this._fireCreatedEvent();
@@ -484,24 +515,28 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_onMouseDown: function (e) {
-	  if (e.originalEvent.button === 2) {
-	    return;
-	  }
+		if (e.originalEvent.button === 2) {
+			return;
+		}
 		var originalEvent = e.originalEvent;
 		this._mouseDownOrigin = L.point(originalEvent.clientX, originalEvent.clientY);
 	},
 
 	_onMouseUp: function (e) {
-	  if (e.originalEvent.button === 2) {
-	    return;
-	  }
+		if (e.originalEvent.button === 2) {
+			return;
+		}
 		if (this._mouseDownOrigin) {
-			// We detect clicks within a certain tolerance, otherwise let it
-			// be interpreted as a drag by the map
-			var distance = L.point(e.originalEvent.clientX, e.originalEvent.clientY)
-				.distanceTo(this._mouseDownOrigin);
-			if (Math.abs(distance) < 9 * (window.devicePixelRatio || 1)) {
-				this.addVertex(e.latlng);
+			if (e.originalEvent.ctrlKey && this._markers.length) {
+				this._fireRouteRequest(e.latlng);
+			} else {
+				// We detect clicks within a certain tolerance, otherwise let it
+				// be interpreted as a drag by the map
+				var distance = L.point(e.originalEvent.clientX, e.originalEvent.clientY)
+					.distanceTo(this._mouseDownOrigin);
+				if (Math.abs(distance) < 9 * (window.devicePixelRatio || 1)) {
+					this.addVertex(e.latlng);
+				}
 			}
 		}
 		this._mouseDownOrigin = null;
@@ -522,7 +557,50 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_onContextMenu: function(e) {
-	  e.originalEvent.preventDefault();
+		e.originalEvent.preventDefault();
+	},
+
+	_onMarkerMouseOver: function(e) {
+		var hazardIcon = L.icon({
+			iconUrl: "assets/images/green-marker-icon.png",
+			iconSize: [25, 41],
+			iconAnchor: [12, 41],
+			popupAnchor: [1, -34],
+			shadowSize: [41, 41]
+		});
+
+		e.target.setIcon(hazardIcon);
+	},
+
+	_onMarkerMouseOut: function(e) {
+		e.target.setIcon(new L.Icon.Default());
+	},
+
+	_onMarkerMouseDown: function(e) {
+		if (e.originalEvent.button === 2) {
+			return;
+		}
+		var marker = e.target;
+		this._mouseDownOrigin = this._map.latLngToLayerPoint(marker.getLatLng());
+	},
+
+	_onMarkerMouseUp: function(e) {
+		if (e.originalEvent.button === 2) {
+			return;
+		}
+		if (this._mouseDownOrigin) {
+			if (e.originalEvent.ctrlKey && this._markers.length) {
+				this._fireRouteRequest(e.target.getLatLng());
+			} else {
+				this.addVertex(e.target.getLatLng());
+			}
+		}
+		this._mouseDownOrigin = null;
+	},
+
+	_onMarkerClick: function(e) {
+		this._onMarkerMouseDown(e);
+		this._onMarkerMouseUp(e);
 	},
 
 	_updateFinishHandler: function () {
@@ -744,7 +822,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_removeContinueHandlers: function () {
-	  var _this = this;
+		var _this = this;
 		this._eachContinueHandler(function (handler) {
 			handler.removeHooks();
 			handler._polyline.off('vertex:click', _this._continuePolyline, _this);
@@ -753,52 +831,92 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_removeContinueHandler: function (polyline) {
-	  var _this = this;
+		var _this = this;
 		this._eachContinueHandler(function (handler, index) {
-		  if (handler._polyline === polyline) {
-		    handler.removeHooks();
-			  handler._polyline.off('vertex:click', _this._continuePolyline, _this);
-			  _this._continueHandlers.splice(index, 1);
-		  }
+			if (handler._polyline === polyline) {
+				handler.removeHooks();
+				handler._polyline.off('vertex:click', _this._continuePolyline, _this);
+				_this._continueHandlers.splice(index, 1);
+			}
+		});
+	},
+
+	_appendPoints: function(points) {
+			for (var i=0; i<points.length;i++) {
+				this.addVertex(L.latLng(points[i].reverse()));
+			}
+	},
+
+	_fireRouteRequest: function(latlng) {
+		var markers = this._markers,
+			last = markers[markers.length - 1],
+			latLngs = [last.getLatLng(), latlng],
+			_this = this;
+
+		this._map.fireEvent('request:route', {
+			latLngs: latLngs,
+			callback: function(points) {
+				points.splice(0,1);
+				_this._appendPoints(points);
+			}
 		});
 	},
 
 	_continuePolyline: function (e) {
 
-	  var finishShape = false,
-	      latLngs = e.target._latlngs,
-			  i = 0;
+		var _this = this,
+			finishShape = false,
+			latLngsToAdd = e.target._latlngs,
+			_latLngs = this._poly.getLatLngs(),
+			i = 0;
 
-	  this._removeContinueHandler(e.target);
+		var continuePolyline = function(context, latLngs, finish) {
+			if ((!context._markers.length && e.index === 0) ||
+					(context._markers.length && e.index !== 0)) {
+				context._hiddenPoly.reversed = true;
+				for (i = latLngs.length-1; i >= 0; i--) {
+					context.addVertex(latLngs[i]);
+				}
+			} else {
+				for (i = 0; i < latLngs.length; i++) {
+					context.addVertex(latLngs[i]);
+				}
+			}
+
+			if (finish) {
+				context._finishShape();
+			}
+		};
+
+		this._removeContinueHandler(e.target);
 
 		if (this._hiddenPoly) {
 			this._removeContinueHandlers();
-			this._map.drawnItems.removeLayer(e.target);
+			this._featureGroup.removeLayer(e.target);
 			this._map.fire('draw:deleted', { layers: new L.FeatureGroup().addLayer(e.target) });
 		} else {
 			this._hiddenPoly = e.target;
-			this._map.drawnItems.removeLayer(this._hiddenPoly);
+			this._featureGroup.removeLayer(this._hiddenPoly);
 		}
 
-		if (this._markers.length || this._hiddenPoly) {
-      finishShape = true;
-    }
+		if (_latLngs.length) {
+			finishShape = true;
+		}
 
-    if ((!this._markers.length && e.index === 0) ||
-        (this._markers.length && e.index !== 0)) {
-      this._hiddenPoly.reversed = true;
-      for (i = latLngs.length-1; i >= 0; i--) {
-        this.addVertex(latLngs[i]);
-      }
-    } else {
-      for (i = 0; i < latLngs.length; i++) {
-        this.addVertex(latLngs[i]);
-      }
-    }
+		if (e.originalEvent.originalEvent.ctrlKey) {
+			this._map.fireEvent('request:route', {
+				latLngs: [_latLngs[_latLngs.length-1], e.latlng],
+				callback: function(points) {
+					if (points.length > 3) {
+						_this._appendPoints(points.splice(1,points.length - 2));
+					}
+					continuePolyline(_this, latLngsToAdd, finishShape);
+				}
+			});
+		} else {
+			continuePolyline(this, latLngsToAdd, finishShape);
+		}
 
-    if (finishShape) {
-      this._finishShape();
-    }
 	},
 
 	_eachContinueHandler: function (callback) {
@@ -1903,8 +2021,6 @@ L.Edit = L.Edit || {};
 L.Edit.Segment = L.Handler.extend({
 	options: {},
 
-	options: {},
-
 	initialize: function (poly, options) {
 
 		this.latlngs = [poly._latlngs];
@@ -1925,18 +2041,18 @@ L.Edit.Segment = L.Handler.extend({
 	},
 
 	addHooks: function () {
-	  var _this = this;
-	  if (this._poly.properties) {
-		  var trackId = this._poly.properties.track || this._poly.properties.track_cid;
+		var _this = this;
+		if (this._poly.properties) {
+			var trackId = this._poly.properties.track || this._poly.properties.track_cid;
 
-      this._poly._map.drawnItems.eachLayer(function(layer) {
-        if (!layer.properties) {return;}
-        var id = layer.properties.id || layer.properties.cid;
+			this._poly._map.eachLayer(function(layer) {
+				if (!layer.properties) {return;}
+				var id = layer.properties.id || layer.properties.cid;
 
-        if (id && id === trackId) {
-          _this._poly._track = layer;
-        }
-      });
+				if (id && id === trackId) {
+				  _this._poly._track = layer;
+				}
+			});
 		}
 
 		this._initHandlers();
@@ -1972,18 +2088,18 @@ L.Edit.Segment = L.Handler.extend({
 	},
 
 	_onTrackDelete: function() {
-	  this.removeHooks();
-	  this._map.removeLayer(this._poly);
+		this.removeHooks();
+		this._map.removeLayer(this._poly);
 
-	  var layers = new L.LayerGroup();
-	  this._poly.addTo(layers);
-	  this._map.fire('draw:deleted', { layers: layers });
+		var layers = new L.LayerGroup();
+		this._poly.addTo(layers);
+		this._map.fire('draw:deleted', { layers: layers });
 	}
 
 });
 
 L.Edit.SegmentVerticesEdit = L.Handler.extend({
-  options: {
+	options: {
 		icon: new L.DivIcon({
 			iconSize: new L.Point(8, 8),
 			className: 'leaflet-div-icon leaflet-editing-icon'
@@ -2023,11 +2139,11 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 		if (this._poly._map) {
 
 			this._map = this._poly._map; // Set map
-      this._drawSplitPoints();
+			this._drawSplitPoints();
 			this._map
-        .on('zoomend', this._onZoomEnd, this)
-        .on('mousemove', this._onSplitpointMousemove, this)
-        .on('mouseup', this._onMouseUp, this);
+			  .on('zoomend', this._onZoomEnd, this)
+			  .on('mousemove', this._onSplitpointMousemove, this)
+			  .on('mouseup', this._onMouseUp, this);
 		}
 	},
 
@@ -2037,45 +2153,42 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 		poly.setStyle(poly.options.original);
 
 		if (poly._map) {
-		  this._poly._map
-        .off('zoomend', this._onZoomEnd, this)
-        .off('mousemove', this._onSplitpointMousemove, this)
-        .off('mouseup', this._onMouseUp, this);
+			this._poly._map
+			  .off('zoomend', this._onZoomEnd, this)
+			  .off('mousemove', this._onSplitpointMousemove, this)
+			  .off('mouseup', this._onMouseUp, this);
 
-      this._removeSplitPoints();
-
-//			poly._map.removeLayer(this._markerGroup);
-//			delete this._markerGroup;
+			this._removeSplitPoints();
 		}
 	},
 
 	_onZoomEnd: function(e) {
-	  this._moveSplitPoints();
+		this._moveSplitPoints();
 	},
 
 	_onMouseUp: function(e) {
-	  for (var i = 0; i < this._splitPoints.length; i++) {
-	    this._splitPoints[i]._dragging = false;
-	  }
+		for (var i = 0; i < this._splitPoints.length; i++) {
+		  this._splitPoints[i]._dragging = false;
+		}
 	},
 
 	_moveSplitPoints: function(e) {
-	  var splitPoints = this._splitPoints,
-	      length = this._splitPoints.length;
+		var splitPoints = this._splitPoints,
+			length = this._splitPoints.length;
 
-	  for (var i = 0; i < length; i++) {
-	    this._moveSplitPoint(splitPoints[i], null);
-	  }
+		for (var i = 0; i < length; i++) {
+			this._moveSplitPoint(splitPoints[i], null);
+		}
 	},
 
 	_drawSplitPoints: function() {
 	  var latlngs = this._poly.getLatLngs();
 
-    this._removeSplitPoints();
+	this._removeSplitPoints();
 
 	  this._splitPoints = [
-	    this._drawSplitPoint(latlngs[0]),
-	    this._drawSplitPoint(latlngs[latlngs.length-1])
+		this._drawSplitPoint(latlngs[0]),
+		this._drawSplitPoint(latlngs[latlngs.length-1])
 	  ];
 
 	  return this;
@@ -2084,162 +2197,161 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 	_removeSplitPoints: function() {
 	  var splitPoints = this._splitPoints || [];
 	  for (var i = 0; i < splitPoints.length; i++) {
-	    this._removeSplitPoint(splitPoints[i]);
+		this._removeSplitPoint(splitPoints[i]);
 	  }
 	  this._splitPoints = [];
 	},
 
 	_removeSplitPoint: function(splitPoint) {
-	    var vertices = splitPoint.vertices,
-	        length = vertices.length;
+		var vertices = splitPoint.vertices,
+			length = vertices.length;
 
-	    for (var i = 0; i < length; i++) {
-	      this._map._pathRoot.removeChild(vertices[i]);
-	    }
+		for (var i = 0; i < length; i++) {
+		  this._map._pathRoot.removeChild(vertices[i]);
+		}
 	},
 
 	_drawSplitPoint: function (latlng) {
-    var controlVertex = this._createVertex(latlng, 8, '#ffffff'),
-        vertices = [
-          this._createVertex(latlng, 10, '#00ff00'),
-          controlVertex
-        ];
+		var controlVertex = this._createVertex(latlng, 8, '#ffffff'),
+			vertices = [
+			  this._createVertex(latlng, 10, '#00ff00'),
+			  controlVertex
+			];
 
-    for (var i = 0; i < vertices.length; i++) {
-      this._map._pathRoot.appendChild(vertices[i]);
-    }
+		for (var i = 0; i < vertices.length; i++) {
+		  this._map._pathRoot.appendChild(vertices[i]);
+		}
 
-    var closest,
-        index = 0;
+		var closest,
+			index = 0;
 
-    if (this._poly._track) {
-      closest = this.closestLayerPoint(latlng, this._poly._track);
-      index = closest.index;
-    }
+		if (this._poly._track) {
+		  closest = this.closestLayerPoint(latlng, this._poly._track);
+		  index = closest.index;
+		}
 
-    var splitPoint = {
-      latlng: latlng,
-      vertices: vertices,
-      index: index
-    };
+		var splitPoint = {
+		  latlng: latlng,
+		  vertices: vertices,
+		  index: index
+		};
 
-    this._addSplitPointHooks(controlVertex, splitPoint);
-    return splitPoint;
-  },
+		this._addSplitPointHooks(controlVertex, splitPoint);
+		return splitPoint;
+	},
 
-  _createVertex: function(latlng, radius, color) {
-    var namespace = 'http://www.w3.org/2000/svg',
-        point = this._map.latLngToLayerPoint(latlng),
-        vertex;
+	_createVertex: function(latlng, radius, color) {
+		var namespace = 'http://www.w3.org/2000/svg',
+			point = this._map.latLngToLayerPoint(latlng),
+			vertex;
 
-    vertex = document.createElementNS(namespace, 'circle');
-    vertex.setAttributeNS(null, 'r', radius);
-    vertex.setAttributeNS(null, 'cx', point.x);
-    vertex.setAttributeNS(null, 'cy', point.y);
-    vertex.setAttributeNS(null, 'fill', color);
-    vertex.setAttributeNS(null, 'fill-opacity', this._poly.options.opacity);
-    return vertex;
-  },
+		vertex = document.createElementNS(namespace, 'circle');
+		vertex.setAttributeNS(null, 'r', radius);
+		vertex.setAttributeNS(null, 'cx', point.x);
+		vertex.setAttributeNS(null, 'cy', point.y);
+		vertex.setAttributeNS(null, 'fill', color);
+		vertex.setAttributeNS(null, 'fill-opacity', this._poly.options.opacity);
+		return vertex;
+	},
 
-  _addSplitPointHooks: function(vertex, splitPoint) {
-    var _this = this;
-    vertex.className.baseVal = 'splitpoint';
+	_addSplitPointHooks: function(vertex, splitPoint) {
+		var _this = this;
+		vertex.className.baseVal = 'splitpoint';
 
-    vertex.onmouseover = function(e) {
-      _this._onSplitpointMouseover(e);
-    };
-    vertex.onmouseout = function(e) {
-      _this._onSplitpointMouseout(e, splitPoint);
-    };
-    vertex.onmousedown = function(e) {
-      _this._onSplitpointMousedown(e, splitPoint);
-    };
-    vertex.onmouseup = function(e) {
-      _this._onSplitpointMouseup(e, splitPoint);
-    };
-  },
+		vertex.onmouseover = function(e) {
+		  _this._onSplitpointMouseover(e);
+		};
+		vertex.onmouseout = function(e) {
+		  _this._onSplitpointMouseout(e, splitPoint);
+		};
+		vertex.onmousedown = function(e) {
+		  _this._onSplitpointMousedown(e, splitPoint);
+		};
+		vertex.onmouseup = function(e) {
+		  _this._onSplitpointMouseup(e, splitPoint);
+		};
+	},
 
-  _eachSplitVertex: function(callback) {
-    var splitPoints = this._splitPoints;
-    for (var i = 0; i < splitPoints.length; i++) {
-      var vertices = splitPoints[i].vertices;
-      for (var j = 0; j < vertices.length; j++) {
-        if (vertices[j].className.baseVal === 'splitpoint') {
-          callback(vertices[j]);
-        }
-      }
-    }
-  },
+	_eachSplitVertex: function(callback) {
+		var splitPoints = this._splitPoints;
+		for (var i = 0; i < splitPoints.length; i++) {
+			var vertices = splitPoints[i].vertices;
+			for (var j = 0; j < vertices.length; j++) {
+			  if (vertices[j].className.baseVal === 'splitpoint') {
+				callback(vertices[j]);
+			  }
+		  }
+		}
+	},
 
-  _onSplitpointMouseover: function() {
-    this._map.dragging.disable();
-    this._eachSplitVertex(function(vertex) {
-      vertex.setAttribute('fill', '#C9C9C9', '');
-    });
+	_onSplitpointMouseover: function() {
+		this._map.dragging.disable();
+		this._eachSplitVertex(function(vertex) {
+			vertex.setAttribute('fill', '#C9C9C9', '');
+		});
 
-    this._poly.setStyle({color: '#C9C9C9'});
-  },
+		this._poly.setStyle({color: '#C9C9C9'});
+	},
 
-  _onSplitpointMouseout: function(e, splitPoint) {
-    this._map.dragging.enable();
-//    splitPoint._dragging = false;
-    this._eachSplitVertex(function(vertex) {
-      vertex.setAttribute('fill', '#ffffff', '');
-    });
-    this._poly.setStyle({color: this._polyColor});
-  },
+	_onSplitpointMouseout: function(e, splitPoint) {
+		this._map.dragging.enable();
+		this._eachSplitVertex(function(vertex) {
+			vertex.setAttribute('fill', '#ffffff', '');
+		});
+		this._poly.setStyle({color: this._polyColor});
+	},
 
-  _onSplitpointMousedown: function(e, splitPoint) {
-    splitPoint._dragging = true;
-  },
+	_onSplitpointMousedown: function(e, splitPoint) {
+		splitPoint._dragging = true;
+	},
 
-  _onSplitpointMouseup: function(e, splitPoint) {
-    splitPoint._dragging = false;
-  },
+	_onSplitpointMouseup: function(e, splitPoint) {
+		splitPoint._dragging = false;
+	},
 
-  _onSplitpointMousemove: function(e) {
-    var splitPoint,
-        splitPoints = this._splitPoints,
-        length = splitPoints.length;
+	_onSplitpointMousemove: function(e) {
+		var splitPoint,
+			splitPoints = this._splitPoints,
+			length = splitPoints.length;
 
-    for (var i = 0; i < length; i++) {
-      if (splitPoints[i]._dragging) {
-        splitPoint = splitPoints[i];
-        break;
-      }
-    }
+		for (var i = 0; i < length; i++) {
+			if (splitPoints[i]._dragging) {
+				splitPoint = splitPoints[i];
+				break;
+			}
+		}
 
-    if (!splitPoint || !this._poly._track) {
-      return;
-    }
-    var latlng = e.latlng,
-      latlngs = [],
-      closest;
+		if (!splitPoint || !this._poly._track) {
+		  return;
+		}
+		var latlng = e.latlng,
+			latlngs = [],
+			closest;
 
-    this._poly.edited = true;
-    closest = this.closestLayerPoint(latlng, this._poly._track);
-    splitPoint.index = closest.index;
-    this._moveSplitPoint(splitPoint, closest);
+		this._poly.edited = true;
+		closest = this.closestLayerPoint(latlng, this._poly._track);
+		splitPoint.index = closest.index;
+		this._moveSplitPoint(splitPoint, closest);
 
-    var start = this._splitPoints[0],
-        end = this._splitPoints[1];
+		var start = this._splitPoints[0],
+			end = this._splitPoints[1];
 
-    latlngs = this._splitTrack(start, end);
-    this._poly.setLatLngs(latlngs);
-  },
+		latlngs = this._splitTrack(start, end);
+		this._poly.setLatLngs(latlngs);
+	},
 
-  _moveSplitPoint: function(splitPoint, latlng) {
-    var _latlng = latlng || splitPoint.latlng,
-        vertices = splitPoint.vertices,
-        length = vertices.length,
-        point = this._map.latLngToLayerPoint(_latlng);
+	_moveSplitPoint: function(splitPoint, latlng) {
+		var _latlng = latlng || splitPoint.latlng,
+			vertices = splitPoint.vertices,
+			length = vertices.length,
+			point = this._map.latLngToLayerPoint(_latlng);
 
-    splitPoint.latlng = _latlng;
-    for (var i = 0; i < length; i++) {
-      vertices[i].setAttributeNS(null, 'cx', point.x);
-      vertices[i].setAttributeNS(null, 'cy', point.y);
-    }
-  },
+		splitPoint.latlng = _latlng;
+		for (var i = 0; i < length; i++) {
+			vertices[i].setAttributeNS(null, 'cx', point.x);
+			vertices[i].setAttributeNS(null, 'cy', point.y);
+		}
+	},
 
 	_createMarker: function (latlng) {
 		var marker = new L.Marker(latlng, {
@@ -2249,13 +2361,13 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 		marker._origLatLng = latlng;
 
 		marker
-			.on('dragstart', this._onMarkerDragStart, this)
-			.on('drag', this._onMarkerDrag, this)
-			.on('dragend', this._fireEdit, this)
-			.on('touchmove', this._onTouchMove, this)
-			.on('MSPointerMove', this._onTouchMove, this)
-			.on('touchend', this._fireEdit, this)
-			.on('MSPointerUp', this._fireEdit, this);
+		  .on('dragstart', this._onMarkerDragStart, this)
+		  .on('drag', this._onMarkerDrag, this)
+		  .on('dragend', this._fireEdit, this)
+		  .on('touchmove', this._onTouchMove, this)
+		  .on('MSPointerMove', this._onTouchMove, this)
+		  .on('touchend', this._fireEdit, this)
+		  .on('MSPointerUp', this._fireEdit, this);
 
 		this._markerGroup.addLayer(marker);
 
@@ -2275,13 +2387,13 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 		this._updateIndexes(i, -1);
 
 		marker
-			.off('dragstart', this._onMarkerDragStart, this)
-			.off('drag', this._onMarkerDrag, this)
-			.off('dragend', this._fireEdit, this)
-			.off('touchmove', this._onMarkerDrag, this)
-			.off('touchend', this._fireEdit, this)
-			.off('MSPointerMove', this._onTouchMove, this)
-			.off('MSPointerUp', this._fireEdit, this);
+		  .off('dragstart', this._onMarkerDragStart, this)
+		  .off('drag', this._onMarkerDrag, this)
+		  .off('dragend', this._fireEdit, this)
+		  .off('touchmove', this._onMarkerDrag, this)
+		  .off('touchend', this._fireEdit, this)
+		  .off('MSPointerMove', this._onTouchMove, this)
+		  .off('MSPointerUp', this._fireEdit, this);
 	},
 
 	_fireEdit: function () {
@@ -2312,62 +2424,62 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 	},
 
 	closestLayerPoint: function (latlng, layer) {
-      var minDistance = Infinity,
-                        p,
-                        p1,
-                        p2,
-                        minPoint = null,
-                        latlngs = layer.getLatLngs(),
-                        _this = this;
+		var minDistance = Infinity,
+						  p,
+						  p1,
+						  p2,
+						  minPoint = null,
+						  latlngs = layer.getLatLngs(),
+						  _this = this;
 
-      var project = function(latlng) {
-        return _this._map.project(L.latLng(latlng));
-      };
+		var project = function(latlng) {
+		  return _this._map.project(L.latLng(latlng));
+		};
 
-      p = project(latlng);
+		p = project(latlng);
 
-      for (var i = 1, len = latlngs.length; i < len; i++) {
-          p1 = project(latlngs[i - 1]);
-          p2 = project(latlngs[i]);
-          var sqDist = L.LineUtil._sqClosestPointOnSegment(p, p1, p2, true);
-          if (sqDist < minDistance) {
-              minDistance = sqDist;
-              minPoint = L.LineUtil._sqClosestPointOnSegment(p, p1, p2);
-              minPoint = _this._map.unproject(minPoint);
-              minPoint.index = i;
-          }
-      }
-      if (minPoint) {
-          minPoint.distance = Math.sqrt(minDistance);
-      }
-      return minPoint;
-  },
+		for (var i = 1, len = latlngs.length; i < len; i++) {
+			p1 = project(latlngs[i - 1]);
+			p2 = project(latlngs[i]);
+			var sqDist = L.LineUtil._sqClosestPointOnSegment(p, p1, p2, true);
+			if (sqDist < minDistance) {
+				minDistance = sqDist;
+				minPoint = L.LineUtil._sqClosestPointOnSegment(p, p1, p2);
+				minPoint = _this._map.unproject(minPoint);
+				minPoint.index = i;
+			}
+		}
+		if (minPoint) {
+			minPoint.distance = Math.sqrt(minDistance);
+		}
+		return minPoint;
+	},
 
-  _splitTrack: function (start, end) {
-        var track = this._poly._track,
-            startIndex = start.index,
-            endIndex = end.index,
-            trackLatLngs = [],
-            firstPoint = start.latlng,
-            endPoint = end.latlng,
-            latlngs = [];
+	_splitTrack: function (start, end) {
+		var track = this._poly._track,
+			startIndex = start.index,
+			endIndex = end.index,
+			trackLatLngs = [],
+			firstPoint = start.latlng,
+			endPoint = end.latlng,
+			latlngs = [];
 
-        if (startIndex > endIndex) {
-            startIndex = startIndex + endIndex;
-            endIndex = startIndex - endIndex;
-            startIndex = startIndex - endIndex;
-            firstPoint = end;
-            endPoint = start;
-        }
-        latlngs.push(firstPoint);
+		if (startIndex > endIndex) {
+			startIndex = startIndex + endIndex;
+			endIndex = startIndex - endIndex;
+			startIndex = startIndex - endIndex;
+			firstPoint = end;
+			endPoint = start;
+		}
+		latlngs.push(firstPoint);
 
-        trackLatLngs = track.getLatLngs().slice(startIndex, endIndex);
-        latlngs = latlngs.concat(trackLatLngs);
-        latlngs.push(endPoint);
+		trackLatLngs = track.getLatLngs().slice(startIndex, endIndex);
+		latlngs = latlngs.concat(trackLatLngs);
+		latlngs.push(endPoint);
 
-        return latlngs;
+		return latlngs;
 
-    },
+	},
 
 
 });
@@ -3719,7 +3831,9 @@ L.DrawToolbar = L.Toolbar.extend({
 		for (var type in this.options) {
 			if (this.options.hasOwnProperty(type)) {
 				if (options[type]) {
-					options[type] = L.extend({}, this.options[type], options[type]);
+					options[type] = L.extend({
+					  featureGroup: options.featureGroup
+					}, this.options[type], options[type]);
 				}
 			}
 		}
@@ -3967,252 +4081,252 @@ L.EditToolbar = L.Toolbar.extend({
 
 
 L.EditToolbar.Handler = L.Handler.extend({
-    includes: L.Mixin.Events,
+	includes: L.Mixin.Events,
 
-    revertLayers: function () {
-        this._featureGroup.eachLayer(function (layer) {
-            this._revertLayer(layer);
-        }, this);
-    },
+	revertLayers: function () {
+		this._featureGroup.eachLayer(function (layer) {
+			this._revertLayer(layer);
+		}, this);
+	},
 
-    _revertLayer: function (layer) {
-        var id = L.Util.stamp(layer);
-        layer.edited = false;
-        if (this._uneditedLayerProps.hasOwnProperty(id)) {
-            // Polyline, Polygon or Rectangle
-            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle ||
-              layer instanceof L.Segment) {
-                layer.setLatLngs(this._uneditedLayerProps[id].latlngs);
-            } else if (layer instanceof L.Circle) {
-                layer.setLatLng(this._uneditedLayerProps[id].latlng);
-                layer.setRadius(this._uneditedLayerProps[id].radius);
-            } else if (layer instanceof L.Marker) { // Marker
-                layer.setLatLng(this._uneditedLayerProps[id].latlng);
-            }
+	_revertLayer: function (layer) {
+		var id = L.Util.stamp(layer);
+		layer.edited = false;
+		if (this._uneditedLayerProps.hasOwnProperty(id)) {
+			// Polyline, Polygon or Rectangle
+			if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle ||
+			  layer instanceof L.Segment) {
+				layer.setLatLngs(this._uneditedLayerProps[id].latlngs);
+			} else if (layer instanceof L.Circle) {
+				layer.setLatLng(this._uneditedLayerProps[id].latlng);
+				layer.setRadius(this._uneditedLayerProps[id].radius);
+			} else if (layer instanceof L.Marker) { // Marker
+				layer.setLatLng(this._uneditedLayerProps[id].latlng);
+			}
 
-            layer.fire('revert-edited', { layer: layer });
-        }
-    },
+			layer.fire('revert-edited', { layer: layer });
+		}
+	},
 
-    _backupLayer: function (layer) {
-        var id = L.Util.stamp(layer);
+	_backupLayer: function (layer) {
+		var id = L.Util.stamp(layer);
 
-        if (!this._uneditedLayerProps[id]) {
-            // Polyline, Polygon or Rectangle
-            if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle ||
-              layer instanceof L.Segment) {
-                this._uneditedLayerProps[id] = {
-                    latlngs: L.LatLngUtil.cloneLatLngs(layer.getLatLngs())
-                };
-            } else if (layer instanceof L.Circle) {
-                this._uneditedLayerProps[id] = {
-                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng()),
-                    radius: layer.getRadius()
-                };
-            } else if (layer instanceof L.Marker) { // Marker
-                this._uneditedLayerProps[id] = {
-                    latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng())
-                };
-            }
-        }
-    },
+		if (!this._uneditedLayerProps[id]) {
+			// Polyline, Polygon or Rectangle
+			if (layer instanceof L.Polyline || layer instanceof L.Polygon || layer instanceof L.Rectangle ||
+			  layer instanceof L.Segment) {
+				this._uneditedLayerProps[id] = {
+					latlngs: L.LatLngUtil.cloneLatLngs(layer.getLatLngs())
+				};
+			} else if (layer instanceof L.Circle) {
+				this._uneditedLayerProps[id] = {
+					latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng()),
+					radius: layer.getRadius()
+				};
+			} else if (layer instanceof L.Marker) { // Marker
+				this._uneditedLayerProps[id] = {
+					latlng: L.LatLngUtil.cloneLatLng(layer.getLatLng())
+				};
+			}
+		}
+	},
 
-    _getTooltipText: function () {
-        return ({
-            text: L.drawLocal.edit.handlers.split.tooltip.text,
-            subtext: L.drawLocal.edit.handlers.split.tooltip.subtext
-        });
-    },
+	_getTooltipText: function () {
+		return ({
+			text: L.drawLocal.edit.handlers.split.tooltip.text,
+			subtext: L.drawLocal.edit.handlers.split.tooltip.subtext
+		});
+	},
 
-    _updateTooltip: function () {
-        this._tooltip.updateContent(this._getTooltipText());
-    },
+	_updateTooltip: function () {
+		this._tooltip.updateContent(this._getTooltipText());
+	},
 
-    _hasAvailableLayers: function () {
-        return this._featureGroup.getLayers().length > 0;
-    },
+	_hasAvailableLayers: function () {
+		return this._featureGroup.getLayers().length > 0;
+	},
 
 });
 
 
 L.EditToolbar.Edit = L.EditToolbar.Handler.extend({
-    statics: {
-        TYPE: 'edit'
-    },
+	statics: {
+		TYPE: 'edit'
+	},
 
-    includes: L.Mixin.Events,
+	includes: L.Mixin.Events,
 
-    initialize: function (map, options) {
-        L.Handler.prototype.initialize.call(this, map);
+	initialize: function (map, options) {
+		L.Handler.prototype.initialize.call(this, map);
 
-        L.setOptions(this, options);
+		L.setOptions(this, options);
 
-        // Store the selectable layer group for ease of access
-        this._featureGroup = options.featureGroup;
+		// Store the selectable layer group for ease of access
+		this._featureGroup = options.featureGroup;
 
-        if (!(this._featureGroup instanceof L.FeatureGroup)) {
-            throw new Error('options.featureGroup must be a L.FeatureGroup');
-        }
+		if (!(this._featureGroup instanceof L.FeatureGroup)) {
+			throw new Error('options.featureGroup must be a L.FeatureGroup');
+		}
 
-        this._uneditedLayerProps = {};
+		this._uneditedLayerProps = {};
 
-        // Save the type so super can fire, need to do this as cannot do this.TYPE :(
-        this.type = L.EditToolbar.Edit.TYPE;
-    },
+		// Save the type so super can fire, need to do this as cannot do this.TYPE :(
+		this.type = L.EditToolbar.Edit.TYPE;
+	},
 
-    enable: function () {
-        if (this._enabled || !this._hasAvailableLayers()) {
-            return;
-        }
-        this.fire('enabled', {handler: this.type});
-          //this disable other handlers
+	enable: function () {
+		if (this._enabled || !this._hasAvailableLayers()) {
+			return;
+		}
+		this.fire('enabled', {handler: this.type});
+		  //this disable other handlers
 
-        this._map.fire('draw:editstart', { handler: this.type });
-          //allow drawLayer to be updated before beginning edition.
+		this._map.fire('draw:editstart', { handler: this.type });
+		  //allow drawLayer to be updated before beginning edition.
 
-        L.Handler.prototype.enable.call(this);
-        this._featureGroup
-            .on('layeradd', this._enableLayerEdit, this)
-            .on('layerremove', this._disableLayerEdit, this);
-    },
+		L.Handler.prototype.enable.call(this);
+		this._featureGroup
+			.on('layeradd', this._enableLayerEdit, this)
+			.on('layerremove', this._disableLayerEdit, this);
+	},
 
-    disable: function () {
-        if (!this._enabled) { return; }
-        this._featureGroup
-          .off('layeradd', this._enableLayerEdit, this)
-          .off('layerremove', this._disableLayerEdit, this);
-        L.Handler.prototype.disable.call(this);
-        this._map.fire('draw:editstop', { handler: this.type });
-        this.fire('disabled', {handler: this.type});
-    },
+	disable: function () {
+		if (!this._enabled) { return; }
+		this._featureGroup
+		  .off('layeradd', this._enableLayerEdit, this)
+		  .off('layerremove', this._disableLayerEdit, this);
+		L.Handler.prototype.disable.call(this);
+		this._map.fire('draw:editstop', { handler: this.type });
+		this.fire('disabled', {handler: this.type});
+	},
 
-    addHooks: function () {
-        var map = this._map;
+	addHooks: function () {
+		var map = this._map;
 
-        if (map) {
-            map.getContainer().focus();
+		if (map) {
+			map.getContainer().focus();
 
-            this._featureGroup.eachLayer(this._enableLayerEdit, this);
+			this._featureGroup.eachLayer(this._enableLayerEdit, this);
 
-            this._tooltip = new L.Tooltip(this._map);
-            this._updateTooltip();
+			this._tooltip = new L.Tooltip(this._map);
+			this._updateTooltip();
 
-            this._map
-              .on('mousemove', this._onMouseMove, this)
-              .on('touchmove', this._onMouseMove, this)
-              .on('MSPointerMove', this._onMouseMove, this)
-              .on('draw:editvertex', this._updateTooltip, this);
-        }
-    },
+			this._map
+			  .on('mousemove', this._onMouseMove, this)
+			  .on('touchmove', this._onMouseMove, this)
+			  .on('MSPointerMove', this._onMouseMove, this)
+			  .on('draw:editvertex', this._updateTooltip, this);
+		}
+	},
 
-    removeHooks: function () {
-        if (this._map) {
-            // Clean up selected layers.
-            this._featureGroup.eachLayer(this._disableLayerEdit, this);
+	removeHooks: function () {
+		if (this._map) {
+			// Clean up selected layers.
+			this._featureGroup.eachLayer(this._disableLayerEdit, this);
 
-            // Clear the backups of the original layers
-            this._uneditedLayerProps = {};
+			// Clear the backups of the original layers
+			this._uneditedLayerProps = {};
 
-            this._tooltip.dispose();
-            this._tooltip = null;
+			this._tooltip.dispose();
+			this._tooltip = null;
 
-            this._map
-              .off('mousemove', this._onMouseMove, this)
-              .off('touchmove', this._onMouseMove, this)
-              .off('MSPointerMove', this._onMouseMove, this)
-              .off('draw:editvertex', this._updateTooltip, this);
-        }
-    },
+			this._map
+			  .off('mousemove', this._onMouseMove, this)
+			  .off('touchmove', this._onMouseMove, this)
+			  .off('MSPointerMove', this._onMouseMove, this)
+			  .off('draw:editvertex', this._updateTooltip, this);
+		}
+	},
 
-    revertLayers: function () {
-        this._featureGroup.eachLayer(function (layer) {
-            this._revertLayer(layer);
-        }, this);
-    },
+	revertLayers: function () {
+		this._featureGroup.eachLayer(function (layer) {
+			this._revertLayer(layer);
+		}, this);
+	},
 
-    save: function () {
-        var editedLayers = new L.LayerGroup();
-        this._featureGroup.eachLayer(function (layer) {
-            if (layer.edited) {
-                editedLayers.addLayer(layer);
-                layer.edited = false;
-            }
-        });
-        this._map.fire('draw:edited', {layers: editedLayers});
-    },
+	save: function () {
+		var editedLayers = new L.LayerGroup();
+		this._featureGroup.eachLayer(function (layer) {
+			if (layer.edited) {
+				editedLayers.addLayer(layer);
+				layer.edited = false;
+			}
+		});
+		this._map.fire('draw:edited', {layers: editedLayers});
+	},
 
-    _getTooltipText: function () {
-        return ({
-            text: L.drawLocal.edit.handlers.edit.tooltip.text,
-            subtext: L.drawLocal.edit.handlers.edit.tooltip.subtext
-        });
-    },
+	_getTooltipText: function () {
+		return ({
+			text: L.drawLocal.edit.handlers.edit.tooltip.text,
+			subtext: L.drawLocal.edit.handlers.edit.tooltip.subtext
+		});
+	},
 
-    _enableLayerEdit: function (e) {
-        var layer = e.layer || e.target || e,
-            pathOptions;
+	_enableLayerEdit: function (e) {
+		var layer = e.layer || e.target || e,
+			pathOptions;
 
-        // Back up this layer (if haven't before)
-        this._backupLayer(layer);
+		// Back up this layer (if haven't before)
+		this._backupLayer(layer);
 
-        // Set different style for editing mode
-        if (this.options.selectedPathOptions) {
-            pathOptions = L.Util.extend({}, this.options.selectedPathOptions);
+		// Set different style for editing mode
+		if (this.options.selectedPathOptions) {
+			pathOptions = L.Util.extend({}, this.options.selectedPathOptions);
 
-            // Use the existing color of the layer
-            if (pathOptions.maintainColor) {
-                pathOptions.color = layer.options.color;
-                pathOptions.fillColor = layer.options.fillColor;
-            }
+			// Use the existing color of the layer
+			if (pathOptions.maintainColor) {
+				pathOptions.color = layer.options.color;
+				pathOptions.fillColor = layer.options.fillColor;
+			}
 
-            layer.options.original = L.extend({}, layer.options);
-            layer.options.editing = pathOptions;
-        }
+			layer.options.original = L.extend({}, layer.options);
+			layer.options.editing = pathOptions;
+		}
 
-        layer.editing.enable();
-    },
+		layer.editing.enable();
+	},
 
-    _disableLayerEdit: function (e) {
-        var layer = e.layer || e.target || e;
+	_disableLayerEdit: function (e) {
+		var layer = e.layer || e.target || e;
 
-        layer.edited = false;
-        layer.editing.disable();
+		layer.edited = false;
+		layer.editing.disable();
 
-        delete layer.options.editing;
-        delete layer.options.original;
-        // Reset layer styles to that of before select
-        if (this._selectedPathOptions) {
-            if (layer instanceof L.Marker) {
-                this._toggleMarkerHighlight(layer);
-            } else {
-                // reset the layer style to what is was before being selected
-                layer.setStyle(layer.options.previousOptions);
-                // remove the cached options for the layer object
-                delete layer.options.previousOptions;
-            }
-        }
+		delete layer.options.editing;
+		delete layer.options.original;
+		// Reset layer styles to that of before select
+		if (this._selectedPathOptions) {
+			if (layer instanceof L.Marker) {
+				this._toggleMarkerHighlight(layer);
+			} else {
+				// reset the layer style to what is was before being selected
+				layer.setStyle(layer.options.previousOptions);
+				// remove the cached options for the layer object
+				delete layer.options.previousOptions;
+			}
+		}
 
-        layer.editing.disable();
-    },
+		layer.editing.disable();
+	},
 
-    _onMouseMove: function (e) {
-        this._tooltip.updatePosition(e.latlng);
-    },
+	_onMouseMove: function (e) {
+		this._tooltip.updatePosition(e.latlng);
+	},
 
-    _onTouchMove: function (e) {
-        var touchEvent = e.originalEvent.changedTouches[0],
-            layerPoint = this._map.mouseEventToLayerPoint(touchEvent),
-            latlng = this._map.layerPointToLatLng(layerPoint);
-        e.target.setLatLng(latlng);
-    },
+	_onTouchMove: function (e) {
+		var touchEvent = e.originalEvent.changedTouches[0],
+			layerPoint = this._map.mouseEventToLayerPoint(touchEvent),
+			latlng = this._map.layerPointToLatLng(layerPoint);
+		e.target.setLatLng(latlng);
+	},
 
-    _hasAvailableLayers: function () {
-        return this._featureGroup.getLayers().length !== 0;
-    },
+	_hasAvailableLayers: function () {
+		return this._featureGroup.getLayers().length !== 0;
+	},
 
-    _onMarkerDragEnd: function (e) {
-        e.target.edited = true;
-    }
+	_onMarkerDragEnd: function (e) {
+		e.target.edited = true;
+	}
 });
 
 
@@ -4328,10 +4442,27 @@ L.EditToolbar.Delete = L.Handler.extend({
 
 	_removeLayer: function (e) {
 		var layer = e.layer || e.target || e;
+		var _this = this;
 
 		this._deletableLayers.removeLayer(layer);
 
 		this._deletedLayers.addLayer(layer);
+
+        if (layer.properties && layer.properties.type === 'track') {
+          var id = layer.properties.id || layer.properties.cid;
+          if (id) {
+            this._deletableLayers.eachLayer(function(_layer) {
+              var _id;
+              if (_layer.properties) {
+                _id = _layer.properties.track || layer.properties.track_cid
+              }
+              if (id === _id) {
+                _this._deletableLayers.removeLayer(_layer);
+		        _this._deletedLayers.addLayer(_layer);
+              }
+            });
+          }
+        }
 
 		layer.fire('deleted');
 	},
@@ -4347,556 +4478,556 @@ L.EditToolbar.Delete = L.Handler.extend({
 
 
 L.EditToolbar.Split = L.EditToolbar.Handler.extend({
-    statics: {
-        TYPE: 'split'
-    },
+	statics: {
+		TYPE: 'split'
+	},
 
-    includes: L.Mixin.Events,
+	includes: L.Mixin.Events,
 
-    initialize: function (map, options) {
-        L.Handler.prototype.initialize.call(this, map);
+	initialize: function (map, options) {
+		L.Handler.prototype.initialize.call(this, map);
 
-        L.setOptions(this, options);
+		L.setOptions(this, options);
 
-        // Store the selectable layer group for ease of access
-        this._featureGroup = options.featureGroup;
+		// Store the selectable layer group for ease of access
+		this._featureGroup = options.featureGroup;
 
-        if (!(this._featureGroup instanceof L.FeatureGroup)) {
-            throw new Error('options.featureGroup must be a L.FeatureGroup');
-        }
+		if (!(this._featureGroup instanceof L.FeatureGroup)) {
+			throw new Error('options.featureGroup must be a L.FeatureGroup');
+		}
 
-        this._uneditedLayerProps = {};
+		this._uneditedLayerProps = {};
 
-        // Save the type so super can fire, need to do this as cannot do this.TYPE :(
-        this.type = L.EditToolbar.Split.TYPE;
-    },
+		// Save the type so super can fire, need to do this as cannot do this.TYPE :(
+		this.type = L.EditToolbar.Split.TYPE;
+	},
 
-    enable: function () {
-        if (this._enabled || !this._hasAvailableLayers()) {
-            return;
-        }
-        this.fire('enabled', {handler: this.type});
-          //this disable other handlers
+	enable: function () {
+		if (this._enabled || !this._hasAvailableLayers()) {
+			return;
+		}
+		this.fire('enabled', {handler: this.type});
+		  //this disable other handlers
 
-        this._map.fire('draw:editstart', { handler: this.type });
-          //allow drawLayer to be updated before beginning edition.
+		this._map.fire('draw:editstart', { handler: this.type });
+		  //allow drawLayer to be updated before beginning edition.
 
-        L.Handler.prototype.enable.call(this);
-        this._featureGroup
-            .on('layeradd', this._enableLayerSplit, this)
-            .on('layerremove', this._disableLayerSplit, this);
-    },
+		L.Handler.prototype.enable.call(this);
+		this._featureGroup
+			.on('layeradd', this._enableLayerSplit, this)
+			.on('layerremove', this._disableLayerSplit, this);
+	},
 
-    disable: function () {
-        if (!this._enabled) { return; }
-        this._featureGroup
-            .off('layeradd', this._enableLayerSplit, this)
-            .off('layerremove', this._disableLayerSplit, this);
-        L.Handler.prototype.disable.call(this);
-        this._map.fire('draw:editstop', { handler: this.type });
-        this.fire('disabled', {handler: this.type});
-        this._removeSplitPoints();
+	disable: function () {
+		if (!this._enabled) { return; }
+		this._featureGroup
+			.off('layeradd', this._enableLayerSplit, this)
+			.off('layerremove', this._disableLayerSplit, this);
+		L.Handler.prototype.disable.call(this);
+		this._map.fire('draw:editstop', { handler: this.type });
+		this.fire('disabled', {handler: this.type});
+		this._removeSplitPoints();
 
-        if (this._tempLine) {
-          this._removeTempLine();
-        }
-    },
+		if (this._tempLine) {
+		  this._removeTempLine();
+		}
+	},
 
-    addHooks: function () {
-        if (this._map) {
-            this._map.getContainer().focus();
-            this._featureGroup.eachLayer(this._enableLayerSplit, this);
-            this._tooltip = new L.Tooltip(this._map);
-            this._updateTooltip();
+	addHooks: function () {
+		if (this._map) {
+			this._map.getContainer().focus();
+			this._featureGroup.eachLayer(this._enableLayerSplit, this);
+			this._tooltip = new L.Tooltip(this._map);
+			this._updateTooltip();
 
-            this._map
-                .on('mousemove', this._onMouseMove, this)
-                .on('touchmove', this._onMouseMove, this)
-                .on('MSPointerMove', this._onMouseMove, this)
-                .on('click', this._onMouseClick, this)
-                .on('zoomend', this._onZoomEnd, this);
-        }
-    },
+			this._map
+				.on('mousemove', this._onMouseMove, this)
+				.on('touchmove', this._onMouseMove, this)
+				.on('MSPointerMove', this._onMouseMove, this)
+				.on('click', this._onMouseClick, this)
+				.on('zoomend', this._onZoomEnd, this);
+		}
+	},
 
-    removeHooks: function () {
-        if (this._map) {
-            // Clean up selected layers.
-            this._featureGroup.eachLayer(this._disableLayerSplit, this);
+	removeHooks: function () {
+		if (this._map) {
+			// Clean up selected layers.
+			this._featureGroup.eachLayer(this._disableLayerSplit, this);
 
-            // Clear the backups of the original layers
-            this._uneditedLayerProps = {};
+			// Clear the backups of the original layers
+			this._uneditedLayerProps = {};
 
-            this._tooltip.dispose();
-            this._tooltip = null;
+			this._tooltip.dispose();
+			this._tooltip = null;
 
-            this._map
-                .off('mousemove', this._onMouseMove, this)
-                .off('touchmove', this._onMouseMove, this)
-                .off('MSPointerMove', this._onMouseMove, this)
-                .off('click', this._onMouseClick, this)
-                .off('zoomend', this._onZoomEnd, this);
-        }
-    },
+			this._map
+				.off('mousemove', this._onMouseMove, this)
+				.off('touchmove', this._onMouseMove, this)
+				.off('MSPointerMove', this._onMouseMove, this)
+				.off('click', this._onMouseClick, this)
+				.off('zoomend', this._onZoomEnd, this);
+		}
+	},
 
-    revertLayers: function () {
-        this._featureGroup.eachLayer(function (layer) {
-            this._revertLayer(layer);
-        }, this);
-    },
+	revertLayers: function () {
+		this._featureGroup.eachLayer(function (layer) {
+			this._revertLayer(layer);
+		}, this);
+	},
 
-    save: function () {
-        var editedLayers = new L.LayerGroup();
-        this._featureGroup.eachLayer(function (layer) {
-            if (layer.edited) {
-                editedLayers.addLayer(layer);
-                layer.edited = false;
-                layer.properties = layer.properties || {};
-                layer.properties.type = 'segment';
-            }
-        });
-        this._map.fire('draw:splitted', {layers: editedLayers});
-    },
+	save: function () {
+		var editedLayers = new L.LayerGroup();
+		this._featureGroup.eachLayer(function (layer) {
+			if (layer.edited) {
+				editedLayers.addLayer(layer);
+				layer.edited = false;
+				layer.properties = layer.properties || {};
+				layer.properties.type = 'segment';
+			}
+		});
+		this._map.fire('draw:splitted', {layers: editedLayers});
+	},
 
-    _getTooltipText: function () {
-        return ({
-            text: L.drawLocal.edit.handlers.split.tooltip.text,
-            subtext: L.drawLocal.edit.handlers.split.tooltip.subtext
-        });
-    },
+	_getTooltipText: function () {
+		return ({
+			text: L.drawLocal.edit.handlers.split.tooltip.text,
+			subtext: L.drawLocal.edit.handlers.split.tooltip.subtext
+		});
+	},
 
-    _enableLayerSplit: function (e) {
-        var layer = e.layer || e.target || e;
-        // Back up this layer (if haven't before)
-        this._backupLayer(layer);
-    },
+	_enableLayerSplit: function (e) {
+		var layer = e.layer || e.target || e;
+		// Back up this layer (if haven't before)
+		this._backupLayer(layer);
+	},
 
-    _disableLayerSplit: function (e) {
-        var layer = e.layer || e.target || e;
+	_disableLayerSplit: function (e) {
+		var layer = e.layer || e.target || e;
 
-        layer.edited = false;
+		layer.edited = false;
 
-        delete layer.options.editing;
-        delete layer.options.original;
-        // Reset layer styles to that of before select
-        if (this._selectedPathOptions) {
-            if (layer instanceof L.Marker) {
-                this._toggleMarkerHighlight(layer);
-            } else {
-                // reset the layer style to what is was before being selected
-                layer.setStyle(layer.options.previousOptions);
-                // remove the cached options for the layer object
-                delete layer.options.previousOptions;
-            }
-        }
-    },
+		delete layer.options.editing;
+		delete layer.options.original;
+		// Reset layer styles to that of before select
+		if (this._selectedPathOptions) {
+			if (layer instanceof L.Marker) {
+				this._toggleMarkerHighlight(layer);
+			} else {
+				// reset the layer style to what is was before being selected
+				layer.setStyle(layer.options.previousOptions);
+				// remove the cached options for the layer object
+				delete layer.options.previousOptions;
+			}
+		}
+	},
 
-    _onZoomEnd: function () {
-        if (this._splitPoint) {
-            this._drawSplitPoint(this._splitPoint);
-        }
+	_onZoomEnd: function () {
+		if (this._splitPoint) {
+			this._drawSplitPoint(this._splitPoint);
+		}
 
-        if (this._firstSplitPoint) {
-            this._drawSplitPoint(this._firstSplitPoint);
-        }
-    },
+		if (this._firstSplitPoint) {
+			this._drawSplitPoint(this._firstSplitPoint);
+		}
+	},
 
-    _removeSplitPoints: function () {
-        if (this._splitPoint) {
-            this._map._pathRoot.removeChild(this._splitPoint.vertex);
-            this._splitPoint = null;
-        }
+	_removeSplitPoints: function () {
+		if (this._splitPoint) {
+			this._map._pathRoot.removeChild(this._splitPoint.vertex);
+			this._splitPoint = null;
+		}
 
-        if (this._firstSplitPoint) {
-            this._map._pathRoot.removeChild(this._firstSplitPoint.vertex);
-            this._firstSplitPoint = null;
-        }
-    },
+		if (this._firstSplitPoint) {
+			this._map._pathRoot.removeChild(this._firstSplitPoint.vertex);
+			this._firstSplitPoint = null;
+		}
+	},
 
-    _onMouseMove: function (e) {
-        this._tooltip.updatePosition(e.latlng);
-        var latlng = e.latlng,
-            splitPoint = this._getSplitPoint(latlng),
-            templine,
-            layer;
+	_onMouseMove: function (e) {
+		this._tooltip.updatePosition(e.latlng);
+		var latlng = e.latlng,
+			splitPoint = this._getSplitPoint(latlng),
+			templine,
+			layer;
 
-        if (this._splitPoint) {
-            this._splitPoint.vertex.onmouseclick = null;
-            this._map._pathRoot.removeChild(this._splitPoint.vertex);
-            this._splitPoint = null;
-        }
+		if (this._splitPoint) {
+			this._splitPoint.vertex.onmouseclick = null;
+			this._map._pathRoot.removeChild(this._splitPoint.vertex);
+			this._splitPoint = null;
+		}
 
-        if (this._tempLine) {
-            this._removeTempLine();
-        }
+		if (this._tempLine) {
+			this._removeTempLine();
+		}
 
-        if (!splitPoint) {
-            return; //too far
-        }
+		if (!splitPoint) {
+			return; //too far
+		}
 
-        this._splitPoint = this._drawSplitPoint(splitPoint);
+		this._splitPoint = this._drawSplitPoint(splitPoint);
 
-        if (this._firstSplitPoint) {
+		if (this._firstSplitPoint) {
 
-            if (this._firstSplitPoint.layer !== this._splitPoint.layer) {
-                return;
-            }
+			if (this._firstSplitPoint.layer !== this._splitPoint.layer) {
+				return;
+			}
 
-            templine = this._getSegment(this._firstSplitPoint, this._splitPoint);
-            if (!templine) {
-                return;
-            }
+			templine = this._getSegment(this._firstSplitPoint, this._splitPoint);
+			if (!templine) {
+				return;
+			}
 
-            layer = this._firstSplitPoint.layer;
-            if (layer && layer.properties) {
-                templine.properties = {
-                  track: layer.properties.id,
-                  track_cid: layer.properties.cid
-                 };
-            }
+			layer = this._firstSplitPoint.layer;
+			if (layer && layer.properties) {
+				templine.properties = {
+				  track: layer.properties.id,
+				  track_cid: layer.properties.cid
+				 };
+			}
 
-            this._addTempLine(templine);
-        }
-    },
+			this._addTempLine(templine);
+		}
+	},
 
-    _onMouseClick: function () {
-        if (this._splitPoint && !this._firstSplitPoint) {
-            this._startSplit();
-        } else {
+	_onMouseClick: function () {
+		if (this._splitPoint && !this._firstSplitPoint) {
+			this._startSplit();
+		} else {
 
-            if (this._splitPoint && this._firstSplitPoint) {
-                if (this._tempLine) {
-                    this._tempLine.edited = true;
-                    this.save();
-                    this._removeTempLine();
-                    this._removeSplitPoints();
-                    this.disable();
-                }
-            }
-        }
+			if (this._splitPoint && this._firstSplitPoint) {
+				if (this._tempLine) {
+					this._tempLine.edited = true;
+					this.save();
+					this._removeTempLine();
+					this._removeSplitPoints();
+					this.disable();
+				}
+			}
+		}
 
-    },
+	},
 
-    _onTouchMove: function () {
+	_onTouchMove: function () {
 //        var touchEvent = e.originalEvent.changedTouches[0],
 //            layerPoint = this._map.mouseEventToLayerPoint(touchEvent),
 //            latlng = this._map.layerPointToLatLng(layerPoint);
-    },
+	},
 
-    _startSplit: function () {
-        this._firstSplitPoint = this._splitPoint;
-        this._splitPoint = null;
-    },
+	_startSplit: function () {
+		this._firstSplitPoint = this._splitPoint;
+		this._splitPoint = null;
+	},
 
-    _getSegment: function (start, end) {
-        var layer = start.layer,
-            startIndex = start.index,
-            endIndex = end.index,
-            segment = [],
-            firstPoint = start.latlng,
-            endPoint = end.latlng,
-            latlngs = [];
+	_getSegment: function (start, end) {
+		var layer = start.layer,
+			startIndex = start.index,
+			endIndex = end.index,
+			segment = [],
+			firstPoint = start.latlng,
+			endPoint = end.latlng,
+			latlngs = [];
 
-        if (startIndex > endIndex) {
-            startIndex = startIndex + endIndex;
-            endIndex = startIndex - endIndex;
-            startIndex = startIndex - endIndex;
-            firstPoint = end;
-            endPoint = start;
-        }
-        segment.push(firstPoint);
+		if (startIndex > endIndex) {
+			startIndex = startIndex + endIndex;
+			endIndex = startIndex - endIndex;
+			startIndex = startIndex - endIndex;
+			firstPoint = end;
+			endPoint = start;
+		}
+		segment.push(firstPoint);
 
-        latlngs = layer.getLatLngs().slice(startIndex, endIndex);
-        segment = segment.concat(latlngs);
-        segment.push(endPoint);
+		latlngs = layer.getLatLngs().slice(startIndex, endIndex);
+		segment = segment.concat(latlngs);
+		segment.push(endPoint);
 
-        return L.segment(segment);
+		return L.segment(segment);
 
-    },
+	},
 
-    _getSplitPoint: function (latlng) {
-        var closest = null,
-            _this = this,
-            _layer = null,
-            _index,
-            temp;
+	_getSplitPoint: function (latlng) {
+		var closest = null,
+			_this = this,
+			_layer = null,
+			_index,
+			temp;
 
-        if (!this._firstSplitPoint) {
-            this._featureGroup.eachLayer(function (layer) {
-                if (layer instanceof L.Polyline) {
-                    temp = _this.closestLayerPoint(latlng, layer);
-                    if (!closest || closest.distance > temp.distance) {
-                        closest = temp;
-                        _layer = layer;
-                        _index = closest.index;
-                    }
-                }
-            });
-        } else {
-            closest = _this.closestLayerPoint(latlng, this._firstSplitPoint.layer);
-            _layer = this._firstSplitPoint.layer;
-            _index = closest.index;
-        }
+		if (!this._firstSplitPoint) {
+			this._featureGroup.eachLayer(function (layer) {
+				if (layer instanceof L.Polyline) {
+					temp = _this.closestLayerPoint(latlng, layer);
+					if (!closest || closest.distance > temp.distance) {
+						closest = temp;
+						_layer = layer;
+						_index = closest.index;
+					}
+				}
+			});
+		} else {
+			closest = _this.closestLayerPoint(latlng, this._firstSplitPoint.layer);
+			_layer = this._firstSplitPoint.layer;
+			_index = closest.index;
+		}
 
-        if (closest && closest.distance < 20) {
-            return {
-              latlng: closest,
-              layer: _layer,
-              index: _index
-            };
-        }
-        return null;
-    },
+		if (closest && closest.distance < 20) {
+			return {
+			  latlng: closest,
+			  layer: _layer,
+			  index: _index
+			};
+		}
+		return null;
+	},
 
-    _drawSplitPoint: function (splitPoint) {
-        var latlng = splitPoint.latlng;
-        if (splitPoint.vertex) {
-            this._map._pathRoot.removeChild(splitPoint.vertex);
-        }
+	_drawSplitPoint: function (splitPoint) {
+		var latlng = splitPoint.latlng;
+		if (splitPoint.vertex) {
+			this._map._pathRoot.removeChild(splitPoint.vertex);
+		}
 
-        var namespace = 'http://www.w3.org/2000/svg',
-            point = this._map.latLngToLayerPoint(latlng),
-            vertex;
+		var namespace = 'http://www.w3.org/2000/svg',
+			point = this._map.latLngToLayerPoint(latlng),
+			vertex;
 
-        vertex = document.createElementNS(namespace, 'circle');
-        vertex.setAttributeNS(null, 'r', 5);
-        vertex.setAttributeNS(null, 'cx', point.x);
-        vertex.setAttributeNS(null, 'cy', point.y);
-        vertex.setAttributeNS(null, 'fill', '#00ff00');
-        vertex.setAttributeNS(null, 'fill-opacity', splitPoint.layer.options.opacity);
+		vertex = document.createElementNS(namespace, 'circle');
+		vertex.setAttributeNS(null, 'r', 5);
+		vertex.setAttributeNS(null, 'cx', point.x);
+		vertex.setAttributeNS(null, 'cy', point.y);
+		vertex.setAttributeNS(null, 'fill', '#00ff00');
+		vertex.setAttributeNS(null, 'fill-opacity', splitPoint.layer.options.opacity);
 
-        splitPoint.vertex = vertex;
-        splitPoint.point = point;
-        this._map._pathRoot.appendChild(vertex);
-        return splitPoint;
-    },
+		splitPoint.vertex = vertex;
+		splitPoint.point = point;
+		this._map._pathRoot.appendChild(vertex);
+		return splitPoint;
+	},
 
-    _addTempLine: function (polyline) {
-        polyline.setStyle({weight: 10, color: '#b8860b'});
-        polyline.addTo(this._featureGroup);
-        polyline.on('click', L.bind(this._onMouseClick, this));
-        this._tempLine = polyline;
-        return this;
-    },
+	_addTempLine: function (polyline) {
+		polyline.setStyle({weight: 10, color: '#b8860b'});
+		polyline.addTo(this._featureGroup);
+		polyline.on('click', L.bind(this._onMouseClick, this));
+		this._tempLine = polyline;
+		return this;
+	},
 
-    _removeTempLine: function () {
-        this._tempLine.off('click', null, null, null);
-        this._featureGroup.removeLayer(this._tempLine);
-        this._tempLine = null;
-        return this;
-    },
+	_removeTempLine: function () {
+		this._tempLine.off('click', null, null, null);
+		this._featureGroup.removeLayer(this._tempLine);
+		this._tempLine = null;
+		return this;
+	},
 
-    closestLayerPoint: function () {
-        return L.Edit.SegmentVerticesEdit.prototype.closestLayerPoint.apply(this,arguments);
-    },
+	closestLayerPoint: function () {
+		return L.Edit.SegmentVerticesEdit.prototype.closestLayerPoint.apply(this,arguments);
+	},
 
 });
 
 
 L.EditToolbar.Erase = L.EditToolbar.Handler.extend({
-    statics: {
-        TYPE: 'erase'
-    },
+	statics: {
+		TYPE: 'erase'
+	},
 
-    includes: L.Mixin.Events,
+	includes: L.Mixin.Events,
 
-    initialize: function (map, options) {
-        L.Handler.prototype.initialize.call(this, map);
+	initialize: function (map, options) {
+		L.Handler.prototype.initialize.call(this, map);
 
-        L.setOptions(this, options);
+		L.setOptions(this, options);
 
-        // Store the selectable layer group for ease of access
-        this._featureGroup = options.featureGroup;
+		// Store the selectable layer group for ease of access
+		this._featureGroup = options.featureGroup;
 
-        if (!(this._featureGroup instanceof L.FeatureGroup)) {
-            throw new Error('options.featureGroup must be a L.FeatureGroup');
-        }
+		if (!(this._featureGroup instanceof L.FeatureGroup)) {
+			throw new Error('options.featureGroup must be a L.FeatureGroup');
+		}
 
-        this._uneditedLayerProps = {};
+		this._uneditedLayerProps = {};
 
-        // Save the type so super can fire, need to do this as cannot do this.TYPE :(
-        this.type = L.EditToolbar.Erase.TYPE;
-    },
+		// Save the type so super can fire, need to do this as cannot do this.TYPE :(
+		this.type = L.EditToolbar.Erase.TYPE;
+	},
 
-    enable: function () {
-        if (this._enabled || !this._hasAvailableLayers()) {
-            return;
-        }
-        this.fire('enabled', {handler: this.type});
-          //this disable other handlers
+	enable: function () {
+		if (this._enabled || !this._hasAvailableLayers()) {
+			return;
+		}
+		this.fire('enabled', {handler: this.type});
+		  //this disable other handlers
 
-        this._map.fire('draw:editstart', { handler: this.type });
-          //allow drawLayer to be updated before beginning edition.
+		this._map.fire('draw:editstart', { handler: this.type });
+		  //allow drawLayer to be updated before beginning edition.
 
-        L.Handler.prototype.enable.call(this);
+		L.Handler.prototype.enable.call(this);
 
-        var _this = this;
-        this._featureGroup.eachLayer(function(layer) {
-          _this._backupLayer(layer);
-        });
-    },
+		var _this = this;
+		this._featureGroup.eachLayer(function(layer) {
+		  _this._backupLayer(layer);
+		});
+	},
 
-    disable: function () {
-        if (!this._enabled) { return; }
+	disable: function () {
+		if (!this._enabled) { return; }
 
-        L.Handler.prototype.disable.call(this);
-        this._map.fire('draw:editstop', { handler: this.type });
-        this.fire('disabled', {handler: this.type});
-    },
+		L.Handler.prototype.disable.call(this);
+		this._map.fire('draw:editstop', { handler: this.type });
+		this.fire('disabled', {handler: this.type});
+	},
 
-    addHooks: function () {
-        if (this._map) {
-            this._map.getContainer().focus();
-            this._tooltip = new L.Tooltip(this._map);
-            this._updateTooltip();
+	addHooks: function () {
+		if (this._map) {
+			this._map.getContainer().focus();
+			this._tooltip = new L.Tooltip(this._map);
+			this._updateTooltip();
 
-            this._map
-                .on('mousemove', this._onMouseMove, this)
-                .on('touchmove', this._onMouseMove, this)
-                .on('MSPointerMove', this._onMouseMove, this)
-                .on('mousedown', this._onMouseDown, this)
-                .on('mouseup', this._onMouseUp, this);
-        }
-    },
+			this._map
+				.on('mousemove', this._onMouseMove, this)
+				.on('touchmove', this._onMouseMove, this)
+				.on('MSPointerMove', this._onMouseMove, this)
+				.on('mousedown', this._onMouseDown, this)
+				.on('mouseup', this._onMouseUp, this);
+		}
+	},
 
-    removeHooks: function () {
-        if (this._map) {
-            this._uneditedLayerProps = {};
+	removeHooks: function () {
+		if (this._map) {
+			this._uneditedLayerProps = {};
 
-            this._tooltip.dispose();
-            this._tooltip = null;
+			this._tooltip.dispose();
+			this._tooltip = null;
 
-            this._map
-                .off('mousemove', this._onMouseMove, this)
-                .off('touchmove', this._onMouseMove, this)
-                .off('MSPointerMove', this._onMouseMove, this)
-                .off('mousedown', this._onMouseDown, this)
-                .off('mouseup', this._onMouseUp, this);
+			this._map
+				.off('mousemove', this._onMouseMove, this)
+				.off('touchmove', this._onMouseMove, this)
+				.off('MSPointerMove', this._onMouseMove, this)
+				.off('mousedown', this._onMouseDown, this)
+				.off('mouseup', this._onMouseUp, this);
 
-            if (this.erasePoint) {
-                this._map._pathRoot.removeChild(this.erasePoint);
-                this.erasePoint = null;
-            }
-        }
-    },
+			if (this.erasePoint) {
+				this._map._pathRoot.removeChild(this.erasePoint);
+				this.erasePoint = null;
+			}
+		}
+	},
 
-    save: function () {
-        var editedLayers = new L.LayerGroup();
-        var deletedLayers = new L.LayerGroup();
-        var _this = this;
+	save: function () {
+		var editedLayers = new L.LayerGroup();
+		var deletedLayers = new L.LayerGroup();
+		var _this = this;
 
-        this._featureGroup.eachLayer(function (layer) {
-            if (layer.edited && !layer.deleted) {
-                editedLayers.addLayer(layer);
-                layer.edited = false;
-                layer.fire('changed', { layer: layer });
-            }
+		this._featureGroup.eachLayer(function (layer) {
+			if (layer.edited && !layer.deleted) {
+				editedLayers.addLayer(layer);
+				layer.edited = false;
+				layer.fire('changed', { layer: layer });
+			}
 
-            if (layer.deleted) {
-                _this._featureGroup.removeLayer(layer);
-                deletedLayers.addLayer(layer);
-                layer.edited = false;
-	              layer.fire('deleted', layer);
-            }
-        });
-        this._map.fire('draw:edited', {layers: editedLayers});
-        this._map.fire('draw:deleted', {layers: deletedLayers});
-    },
+			if (layer.deleted) {
+				_this._featureGroup.removeLayer(layer);
+				deletedLayers.addLayer(layer);
+				layer.edited = false;
+				  layer.fire('deleted', layer);
+			}
+		});
+		this._map.fire('draw:edited', {layers: editedLayers});
+		this._map.fire('draw:deleted', {layers: deletedLayers});
+	},
 
-    _getTooltipText: function () {
-        return ({
-            text: L.drawLocal.edit.handlers.erase.tooltip.text,
-            subtext: L.drawLocal.edit.handlers.erase.tooltip.subtext
-        });
-    },
+	_getTooltipText: function () {
+		return ({
+			text: L.drawLocal.edit.handlers.erase.tooltip.text,
+			subtext: L.drawLocal.edit.handlers.erase.tooltip.subtext
+		});
+	},
 
-    _onMouseMove: function (e) {
-        this._tooltip.updatePosition(e.latlng);
-        var latlng = e.latlng;
+	_onMouseMove: function (e) {
+		this._tooltip.updatePosition(e.latlng);
+		var latlng = e.latlng;
 
-        this._showErasePoint(latlng);
+		this._showErasePoint(latlng);
 
-        if (this._erasing) {
-          this.erase(latlng);
-        }
-    },
+		if (this._erasing) {
+		  this.erase(latlng);
+		}
+	},
 
-    _onMouseDown: function (e) {
-      if (e.originalEvent.button === 2) {
-        this._erasing = true;
-      }
-    },
+	_onMouseDown: function (e) {
+	  if (e.originalEvent.button === 2) {
+		this._erasing = true;
+	  }
+	},
 
-    _onMouseUp: function (e) {
-      if (e.originalEvent.button === 2) {
-        this.erase(e.latlng);
-        this._erasing = false;
-      }
-    },
+	_onMouseUp: function (e) {
+	  if (e.originalEvent.button === 2) {
+		this.erase(e.latlng);
+		this._erasing = false;
+	  }
+	},
 
-    _onTouchMove: function () {
+	_onTouchMove: function () {
 //        var touchEvent = e.originalEvent.changedTouches[0],
 //            layerPoint = this._map.mouseEventToLayerPoint(touchEvent),
 //            latlng = this._map.layerPointToLatLng(layerPoint);
-    },
+	},
 
-    erase: function (latlng) {
-        var _this = this,
-            p;
+	erase: function (latlng) {
+		var _this = this,
+			p;
 
-        p = this._map.latLngToLayerPoint(latlng);
+		p = this._map.latLngToLayerPoint(latlng);
 
-        this._featureGroup.eachLayer(function (layer) {
-            if (layer instanceof L.Polyline) {
-                var latlngs = layer.getLatLngs();
-                for (var i = 0, len = latlngs.length; i < len; i++) {
-                    var p2 = latlngs[i];
-                    if (!p2) {
-                      break;
-                    }
+		this._featureGroup.eachLayer(function (layer) {
+			if (layer instanceof L.Polyline) {
+				var latlngs = layer.getLatLngs();
+				for (var i = 0, len = latlngs.length; i < len; i++) {
+					var p2 = latlngs[i];
+					if (!p2) {
+					  break;
+					}
 
-                    p2 = _this._map.latLngToLayerPoint(p2);
-                    var sqDist = L.LineUtil._sqDist(p, p2);
+					p2 = _this._map.latLngToLayerPoint(p2);
+					var sqDist = L.LineUtil._sqDist(p, p2);
 
-                    if (sqDist < 80) {
-                      latlngs.splice(i,1);
+					if (sqDist < 80) {
+					  latlngs.splice(i,1);
 
-                      if (latlngs.length > 1) {
-                        layer.edited = true;
-                        layer.setLatLngs(latlngs);
-                      } else {
-                        layer.deleted = true;
-                        layer.setLatLngs([]);
-                      }
-                    }
-                }
-            }
-        });
+					  if (latlngs.length > 1) {
+						layer.edited = true;
+						layer.setLatLngs(latlngs);
+					  } else {
+						layer.deleted = true;
+						layer.setLatLngs([]);
+					  }
+					}
+				}
+			}
+		});
 
-        return this;
-    },
+		return this;
+	},
 
-    _showErasePoint: function (latlng) {
-        if (this.erasePoint) {
-            this._map._pathRoot.removeChild(this.erasePoint);
-        }
-        this.erasePoint = this._drawErasePoint(latlng);
-        return this;
-    },
+	_showErasePoint: function (latlng) {
+		if (this.erasePoint) {
+			this._map._pathRoot.removeChild(this.erasePoint);
+		}
+		this.erasePoint = this._drawErasePoint(latlng);
+		return this;
+	},
 
-    _drawErasePoint: function (latlng) {
-        var namespace = 'http://www.w3.org/2000/svg',
-            vertex = document.createElementNS('http://www.w3.org/2000/svg', 'circle'),
-            point = this._map.latLngToLayerPoint(latlng);
+	_drawErasePoint: function (latlng) {
+		var namespace = 'http://www.w3.org/2000/svg',
+			vertex = document.createElementNS('http://www.w3.org/2000/svg', 'circle'),
+			point = this._map.latLngToLayerPoint(latlng);
 
-        vertex = document.createElementNS(namespace, 'circle');
-        vertex.setAttributeNS(null, 'r', 20);
-        vertex.setAttributeNS(null, 'cx', point.x);
-        vertex.setAttributeNS(null, 'cy', point.y);
-        vertex.setAttributeNS(null, 'fill', '#00ff00');
-        vertex.setAttributeNS(null, 'fill-opacity', 0.3);
-        this._map._pathRoot.appendChild(vertex);
-        return vertex;
-    },
+		vertex = document.createElementNS(namespace, 'circle');
+		vertex.setAttributeNS(null, 'r', 20);
+		vertex.setAttributeNS(null, 'cx', point.x);
+		vertex.setAttributeNS(null, 'cy', point.y);
+		vertex.setAttributeNS(null, 'fill', '#00ff00');
+		vertex.setAttributeNS(null, 'fill-opacity', 0.3);
+		this._map._pathRoot.appendChild(vertex);
+		return vertex;
+	},
 
 });
 

@@ -17,7 +17,9 @@ L.DrawToolbar = L.Toolbar.extend({
 		for (var type in this.options) {
 			if (this.options.hasOwnProperty(type)) {
 				if (options[type]) {
-					options[type] = L.extend({}, this.options[type], options[type]);
+					options[type] = L.extend({
+					  featureGroup: options.featureGroup
+					}, this.options[type], options[type]);
 				}
 			}
 		}

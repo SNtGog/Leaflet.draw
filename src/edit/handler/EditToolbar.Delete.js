@@ -110,10 +110,27 @@ L.EditToolbar.Delete = L.Handler.extend({
 
 	_removeLayer: function (e) {
 		var layer = e.layer || e.target || e;
+		var _this = this;
 
 		this._deletableLayers.removeLayer(layer);
 
 		this._deletedLayers.addLayer(layer);
+
+        if (layer.properties && layer.properties.type === 'track') {
+          var id = layer.properties.id || layer.properties.cid;
+          if (id) {
+            this._deletableLayers.eachLayer(function(_layer) {
+              var _id;
+              if (_layer.properties) {
+                _id = _layer.properties.track || layer.properties.track_cid
+              }
+              if (id === _id) {
+                _this._deletableLayers.removeLayer(_layer);
+		        _this._deletedLayers.addLayer(_layer);
+              }
+            });
+          }
+        }
 
 		layer.fire('deleted');
 	},

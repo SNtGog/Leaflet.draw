@@ -43,6 +43,8 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 			this.options.icon = this.options.touchIcon;
 		}
 
+		this._featureGroup = options.featureGroup;
+
 		// Need to set this here to ensure the correct message is used.
 		this.options.drawError.message = L.drawLocal.draw.handlers.polyline.error;
 
@@ -59,6 +61,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	addHooks: function () {
+		var _this = this;
 		L.Draw.Feature.prototype.addHooks.call(this);
 		if (this._map) {
 			this._markers = [];
@@ -89,7 +92,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 
 			if (this.options.canContinue === true) {
 				this._hiddenPoly = null;
-				this._map.drawnItems.eachLayer(this._addContinueHandler, this);
+				this._featureGroup.eachLayer(this._addContinueHandler, this);
 			}
 
 			this._mouseMarker
@@ -106,6 +109,13 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 				.on('zoomlevelschange', this._onZoomEnd, this)
 				.on('click', this._onTouch, this)
 				.on('zoomend', this._onZoomEnd, this);
+
+			this._featureGroup.eachLayer(function(layer) {
+				if (layer instanceof L.Marker) {
+					layer.setZIndexOffset(5000);
+					_this._addMarkerHooks(layer);
+				}
+			});
 		}
 
 		this._eachContinueHandler(function (handler) {
@@ -114,8 +124,9 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	removeHooks: function () {
+		var _this = this;
 		if (this._hiddenPoly) {
-			this._map.drawnItems.addLayer(this._hiddenPoly);
+			this._featureGroup.addLayer(this._hiddenPoly);
 		}
 
 		L.Draw.Feature.prototype.removeHooks.call(this);
@@ -147,11 +158,31 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		this._map
 			.off('mouseup', this._onMouseUp, this)
 			.off('mousemove', this._onMouseMove, this)
-			.off('mouseup', this._onMouseUp, this)
 			.off('zoomend', this._onZoomEnd, this)
 			.off('click', this._onTouch, this);
 
+		this._featureGroup.eachLayer(function(layer) {
+				if (layer instanceof L.Marker) {
+					layer.setZIndexOffset(0);
+					_this._removeMarkerHooks(layer);
+				}
+			});
+
 		this._removeContinueHandlers();
+	},
+
+	_addMarkerHooks: function(marker) {
+		marker
+			.on('mouseover', this._onMarkerMouseOver, this)
+			.on('mouseout', this._onMarkerMouseOut, this)
+			.on('click', this._onMarkerClick, this);
+	},
+
+	_removeMarkerHooks: function(marker) {
+		marker
+			.off('mouseover', this._onMarkerMouseOver, this)
+			.off('mouseout', this._onMarkerMouseOut, this)
+			.off('click', this._onMarkerClick, this);
 	},
 
 	deleteLastVertex: function () {
@@ -224,7 +255,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 				delete hidden.reversed;
 			}
 			this._hiddenPoly.setLatLngs(latlngs);
-			this._map.drawnItems.addLayer(this._hiddenPoly);
+			this._featureGroup.addLayer(this._hiddenPoly);
 		}
 
 		this._fireCreatedEvent();
@@ -276,24 +307,28 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_onMouseDown: function (e) {
-	  if (e.originalEvent.button === 2) {
-	    return;
-	  }
+		if (e.originalEvent.button === 2) {
+			return;
+		}
 		var originalEvent = e.originalEvent;
 		this._mouseDownOrigin = L.point(originalEvent.clientX, originalEvent.clientY);
 	},
 
 	_onMouseUp: function (e) {
-	  if (e.originalEvent.button === 2) {
-	    return;
-	  }
+		if (e.originalEvent.button === 2) {
+			return;
+		}
 		if (this._mouseDownOrigin) {
-			// We detect clicks within a certain tolerance, otherwise let it
-			// be interpreted as a drag by the map
-			var distance = L.point(e.originalEvent.clientX, e.originalEvent.clientY)
-				.distanceTo(this._mouseDownOrigin);
-			if (Math.abs(distance) < 9 * (window.devicePixelRatio || 1)) {
-				this.addVertex(e.latlng);
+			if (e.originalEvent.ctrlKey && this._markers.length) {
+				this._fireRouteRequest(e.latlng);
+			} else {
+				// We detect clicks within a certain tolerance, otherwise let it
+				// be interpreted as a drag by the map
+				var distance = L.point(e.originalEvent.clientX, e.originalEvent.clientY)
+					.distanceTo(this._mouseDownOrigin);
+				if (Math.abs(distance) < 9 * (window.devicePixelRatio || 1)) {
+					this.addVertex(e.latlng);
+				}
 			}
 		}
 		this._mouseDownOrigin = null;
@@ -314,7 +349,50 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_onContextMenu: function(e) {
-	  e.originalEvent.preventDefault();
+		e.originalEvent.preventDefault();
+	},
+
+	_onMarkerMouseOver: function(e) {
+		var hazardIcon = L.icon({
+			iconUrl: "assets/images/green-marker-icon.png",
+			iconSize: [25, 41],
+			iconAnchor: [12, 41],
+			popupAnchor: [1, -34],
+			shadowSize: [41, 41]
+		});
+
+		e.target.setIcon(hazardIcon);
+	},
+
+	_onMarkerMouseOut: function(e) {
+		e.target.setIcon(new L.Icon.Default());
+	},
+
+	_onMarkerMouseDown: function(e) {
+		if (e.originalEvent.button === 2) {
+			return;
+		}
+		var marker = e.target;
+		this._mouseDownOrigin = this._map.latLngToLayerPoint(marker.getLatLng());
+	},
+
+	_onMarkerMouseUp: function(e) {
+		if (e.originalEvent.button === 2) {
+			return;
+		}
+		if (this._mouseDownOrigin) {
+			if (e.originalEvent.ctrlKey && this._markers.length) {
+				this._fireRouteRequest(e.target.getLatLng());
+			} else {
+				this.addVertex(e.target.getLatLng());
+			}
+		}
+		this._mouseDownOrigin = null;
+	},
+
+	_onMarkerClick: function(e) {
+		this._onMarkerMouseDown(e);
+		this._onMarkerMouseUp(e);
 	},
 
 	_updateFinishHandler: function () {
@@ -536,7 +614,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_removeContinueHandlers: function () {
-	  var _this = this;
+		var _this = this;
 		this._eachContinueHandler(function (handler) {
 			handler.removeHooks();
 			handler._polyline.off('vertex:click', _this._continuePolyline, _this);
@@ -545,52 +623,92 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_removeContinueHandler: function (polyline) {
-	  var _this = this;
+		var _this = this;
 		this._eachContinueHandler(function (handler, index) {
-		  if (handler._polyline === polyline) {
-		    handler.removeHooks();
-			  handler._polyline.off('vertex:click', _this._continuePolyline, _this);
-			  _this._continueHandlers.splice(index, 1);
-		  }
+			if (handler._polyline === polyline) {
+				handler.removeHooks();
+				handler._polyline.off('vertex:click', _this._continuePolyline, _this);
+				_this._continueHandlers.splice(index, 1);
+			}
+		});
+	},
+
+	_appendPoints: function(points) {
+			for (var i=0; i<points.length;i++) {
+				this.addVertex(L.latLng(points[i].reverse()));
+			}
+	},
+
+	_fireRouteRequest: function(latlng) {
+		var markers = this._markers,
+			last = markers[markers.length - 1],
+			latLngs = [last.getLatLng(), latlng],
+			_this = this;
+
+		this._map.fireEvent('request:route', {
+			latLngs: latLngs,
+			callback: function(points) {
+				points.splice(0,1);
+				_this._appendPoints(points);
+			}
 		});
 	},
 
 	_continuePolyline: function (e) {
 
-	  var finishShape = false,
-	      latLngs = e.target._latlngs,
-			  i = 0;
+		var _this = this,
+			finishShape = false,
+			latLngsToAdd = e.target._latlngs,
+			_latLngs = this._poly.getLatLngs(),
+			i = 0;
 
-	  this._removeContinueHandler(e.target);
+		var continuePolyline = function(context, latLngs, finish) {
+			if ((!context._markers.length && e.index === 0) ||
+					(context._markers.length && e.index !== 0)) {
+				context._hiddenPoly.reversed = true;
+				for (i = latLngs.length-1; i >= 0; i--) {
+					context.addVertex(latLngs[i]);
+				}
+			} else {
+				for (i = 0; i < latLngs.length; i++) {
+					context.addVertex(latLngs[i]);
+				}
+			}
+
+			if (finish) {
+				context._finishShape();
+			}
+		};
+
+		this._removeContinueHandler(e.target);
 
 		if (this._hiddenPoly) {
 			this._removeContinueHandlers();
-			this._map.drawnItems.removeLayer(e.target);
+			this._featureGroup.removeLayer(e.target);
 			this._map.fire('draw:deleted', { layers: new L.FeatureGroup().addLayer(e.target) });
 		} else {
 			this._hiddenPoly = e.target;
-			this._map.drawnItems.removeLayer(this._hiddenPoly);
+			this._featureGroup.removeLayer(this._hiddenPoly);
 		}
 
-		if (this._markers.length || this._hiddenPoly) {
-      finishShape = true;
-    }
+		if (_latLngs.length) {
+			finishShape = true;
+		}
 
-    if ((!this._markers.length && e.index === 0) ||
-        (this._markers.length && e.index !== 0)) {
-      this._hiddenPoly.reversed = true;
-      for (i = latLngs.length-1; i >= 0; i--) {
-        this.addVertex(latLngs[i]);
-      }
-    } else {
-      for (i = 0; i < latLngs.length; i++) {
-        this.addVertex(latLngs[i]);
-      }
-    }
+		if (e.originalEvent.originalEvent.ctrlKey) {
+			this._map.fireEvent('request:route', {
+				latLngs: [_latLngs[_latLngs.length-1], e.latlng],
+				callback: function(points) {
+					if (points.length > 3) {
+						_this._appendPoints(points.splice(1,points.length - 2));
+					}
+					continuePolyline(_this, latLngsToAdd, finishShape);
+				}
+			});
+		} else {
+			continuePolyline(this, latLngsToAdd, finishShape);
+		}
 
-    if (finishShape) {
-      this._finishShape();
-    }
 	},
 
 	_eachContinueHandler: function (callback) {

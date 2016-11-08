@@ -1,207 +1,207 @@
 L.EditToolbar.Erase = L.EditToolbar.Handler.extend({
-    statics: {
-        TYPE: 'erase'
-    },
+	statics: {
+		TYPE: 'erase'
+	},
 
-    includes: L.Mixin.Events,
+	includes: L.Mixin.Events,
 
-    initialize: function (map, options) {
-        L.Handler.prototype.initialize.call(this, map);
+	initialize: function (map, options) {
+		L.Handler.prototype.initialize.call(this, map);
 
-        L.setOptions(this, options);
+		L.setOptions(this, options);
 
-        // Store the selectable layer group for ease of access
-        this._featureGroup = options.featureGroup;
+		// Store the selectable layer group for ease of access
+		this._featureGroup = options.featureGroup;
 
-        if (!(this._featureGroup instanceof L.FeatureGroup)) {
-            throw new Error('options.featureGroup must be a L.FeatureGroup');
-        }
+		if (!(this._featureGroup instanceof L.FeatureGroup)) {
+			throw new Error('options.featureGroup must be a L.FeatureGroup');
+		}
 
-        this._uneditedLayerProps = {};
+		this._uneditedLayerProps = {};
 
-        // Save the type so super can fire, need to do this as cannot do this.TYPE :(
-        this.type = L.EditToolbar.Erase.TYPE;
-    },
+		// Save the type so super can fire, need to do this as cannot do this.TYPE :(
+		this.type = L.EditToolbar.Erase.TYPE;
+	},
 
-    enable: function () {
-        if (this._enabled || !this._hasAvailableLayers()) {
-            return;
-        }
-        this.fire('enabled', {handler: this.type});
-          //this disable other handlers
+	enable: function () {
+		if (this._enabled || !this._hasAvailableLayers()) {
+			return;
+		}
+		this.fire('enabled', {handler: this.type});
+		  //this disable other handlers
 
-        this._map.fire('draw:editstart', { handler: this.type });
-          //allow drawLayer to be updated before beginning edition.
+		this._map.fire('draw:editstart', { handler: this.type });
+		  //allow drawLayer to be updated before beginning edition.
 
-        L.Handler.prototype.enable.call(this);
+		L.Handler.prototype.enable.call(this);
 
-        var _this = this;
-        this._featureGroup.eachLayer(function(layer) {
-          _this._backupLayer(layer);
-        });
-    },
+		var _this = this;
+		this._featureGroup.eachLayer(function(layer) {
+		  _this._backupLayer(layer);
+		});
+	},
 
-    disable: function () {
-        if (!this._enabled) { return; }
+	disable: function () {
+		if (!this._enabled) { return; }
 
-        L.Handler.prototype.disable.call(this);
-        this._map.fire('draw:editstop', { handler: this.type });
-        this.fire('disabled', {handler: this.type});
-    },
+		L.Handler.prototype.disable.call(this);
+		this._map.fire('draw:editstop', { handler: this.type });
+		this.fire('disabled', {handler: this.type});
+	},
 
-    addHooks: function () {
-        if (this._map) {
-            this._map.getContainer().focus();
-            this._tooltip = new L.Tooltip(this._map);
-            this._updateTooltip();
+	addHooks: function () {
+		if (this._map) {
+			this._map.getContainer().focus();
+			this._tooltip = new L.Tooltip(this._map);
+			this._updateTooltip();
 
-            this._map
-                .on('mousemove', this._onMouseMove, this)
-                .on('touchmove', this._onMouseMove, this)
-                .on('MSPointerMove', this._onMouseMove, this)
-                .on('mousedown', this._onMouseDown, this)
-                .on('mouseup', this._onMouseUp, this);
-        }
-    },
+			this._map
+				.on('mousemove', this._onMouseMove, this)
+				.on('touchmove', this._onMouseMove, this)
+				.on('MSPointerMove', this._onMouseMove, this)
+				.on('mousedown', this._onMouseDown, this)
+				.on('mouseup', this._onMouseUp, this);
+		}
+	},
 
-    removeHooks: function () {
-        if (this._map) {
-            this._uneditedLayerProps = {};
+	removeHooks: function () {
+		if (this._map) {
+			this._uneditedLayerProps = {};
 
-            this._tooltip.dispose();
-            this._tooltip = null;
+			this._tooltip.dispose();
+			this._tooltip = null;
 
-            this._map
-                .off('mousemove', this._onMouseMove, this)
-                .off('touchmove', this._onMouseMove, this)
-                .off('MSPointerMove', this._onMouseMove, this)
-                .off('mousedown', this._onMouseDown, this)
-                .off('mouseup', this._onMouseUp, this);
+			this._map
+				.off('mousemove', this._onMouseMove, this)
+				.off('touchmove', this._onMouseMove, this)
+				.off('MSPointerMove', this._onMouseMove, this)
+				.off('mousedown', this._onMouseDown, this)
+				.off('mouseup', this._onMouseUp, this);
 
-            if (this.erasePoint) {
-                this._map._pathRoot.removeChild(this.erasePoint);
-                this.erasePoint = null;
-            }
-        }
-    },
+			if (this.erasePoint) {
+				this._map._pathRoot.removeChild(this.erasePoint);
+				this.erasePoint = null;
+			}
+		}
+	},
 
-    save: function () {
-        var editedLayers = new L.LayerGroup();
-        var deletedLayers = new L.LayerGroup();
-        var _this = this;
+	save: function () {
+		var editedLayers = new L.LayerGroup();
+		var deletedLayers = new L.LayerGroup();
+		var _this = this;
 
-        this._featureGroup.eachLayer(function (layer) {
-            if (layer.edited && !layer.deleted) {
-                editedLayers.addLayer(layer);
-                layer.edited = false;
-                layer.fire('changed', { layer: layer });
-            }
+		this._featureGroup.eachLayer(function (layer) {
+			if (layer.edited && !layer.deleted) {
+				editedLayers.addLayer(layer);
+				layer.edited = false;
+				layer.fire('changed', { layer: layer });
+			}
 
-            if (layer.deleted) {
-                _this._featureGroup.removeLayer(layer);
-                deletedLayers.addLayer(layer);
-                layer.edited = false;
-	              layer.fire('deleted', layer);
-            }
-        });
-        this._map.fire('draw:edited', {layers: editedLayers});
-        this._map.fire('draw:deleted', {layers: deletedLayers});
-    },
+			if (layer.deleted) {
+				_this._featureGroup.removeLayer(layer);
+				deletedLayers.addLayer(layer);
+				layer.edited = false;
+				  layer.fire('deleted', layer);
+			}
+		});
+		this._map.fire('draw:edited', {layers: editedLayers});
+		this._map.fire('draw:deleted', {layers: deletedLayers});
+	},
 
-    _getTooltipText: function () {
-        return ({
-            text: L.drawLocal.edit.handlers.erase.tooltip.text,
-            subtext: L.drawLocal.edit.handlers.erase.tooltip.subtext
-        });
-    },
+	_getTooltipText: function () {
+		return ({
+			text: L.drawLocal.edit.handlers.erase.tooltip.text,
+			subtext: L.drawLocal.edit.handlers.erase.tooltip.subtext
+		});
+	},
 
-    _onMouseMove: function (e) {
-        this._tooltip.updatePosition(e.latlng);
-        var latlng = e.latlng;
+	_onMouseMove: function (e) {
+		this._tooltip.updatePosition(e.latlng);
+		var latlng = e.latlng;
 
-        this._showErasePoint(latlng);
+		this._showErasePoint(latlng);
 
-        if (this._erasing) {
-          this.erase(latlng);
-        }
-    },
+		if (this._erasing) {
+		  this.erase(latlng);
+		}
+	},
 
-    _onMouseDown: function (e) {
-      if (e.originalEvent.button === 2) {
-        this._erasing = true;
-      }
-    },
+	_onMouseDown: function (e) {
+	  if (e.originalEvent.button === 2) {
+		this._erasing = true;
+	  }
+	},
 
-    _onMouseUp: function (e) {
-      if (e.originalEvent.button === 2) {
-        this.erase(e.latlng);
-        this._erasing = false;
-      }
-    },
+	_onMouseUp: function (e) {
+	  if (e.originalEvent.button === 2) {
+		this.erase(e.latlng);
+		this._erasing = false;
+	  }
+	},
 
-    _onTouchMove: function () {
+	_onTouchMove: function () {
 //        var touchEvent = e.originalEvent.changedTouches[0],
 //            layerPoint = this._map.mouseEventToLayerPoint(touchEvent),
 //            latlng = this._map.layerPointToLatLng(layerPoint);
-    },
+	},
 
-    erase: function (latlng) {
-        var _this = this,
-            p;
+	erase: function (latlng) {
+		var _this = this,
+			p;
 
-        p = this._map.latLngToLayerPoint(latlng);
+		p = this._map.latLngToLayerPoint(latlng);
 
-        this._featureGroup.eachLayer(function (layer) {
-            if (layer instanceof L.Polyline) {
-                var latlngs = layer.getLatLngs();
-                for (var i = 0, len = latlngs.length; i < len; i++) {
-                    var p2 = latlngs[i];
-                    if (!p2) {
-                      break;
-                    }
+		this._featureGroup.eachLayer(function (layer) {
+			if (layer instanceof L.Polyline) {
+				var latlngs = layer.getLatLngs();
+				for (var i = 0, len = latlngs.length; i < len; i++) {
+					var p2 = latlngs[i];
+					if (!p2) {
+					  break;
+					}
 
-                    p2 = _this._map.latLngToLayerPoint(p2);
-                    var sqDist = L.LineUtil._sqDist(p, p2);
+					p2 = _this._map.latLngToLayerPoint(p2);
+					var sqDist = L.LineUtil._sqDist(p, p2);
 
-                    if (sqDist < 80) {
-                      latlngs.splice(i,1);
+					if (sqDist < 80) {
+					  latlngs.splice(i,1);
 
-                      if (latlngs.length > 1) {
-                        layer.edited = true;
-                        layer.setLatLngs(latlngs);
-                      } else {
-                        layer.deleted = true;
-                        layer.setLatLngs([]);
-                      }
-                    }
-                }
-            }
-        });
+					  if (latlngs.length > 1) {
+						layer.edited = true;
+						layer.setLatLngs(latlngs);
+					  } else {
+						layer.deleted = true;
+						layer.setLatLngs([]);
+					  }
+					}
+				}
+			}
+		});
 
-        return this;
-    },
+		return this;
+	},
 
-    _showErasePoint: function (latlng) {
-        if (this.erasePoint) {
-            this._map._pathRoot.removeChild(this.erasePoint);
-        }
-        this.erasePoint = this._drawErasePoint(latlng);
-        return this;
-    },
+	_showErasePoint: function (latlng) {
+		if (this.erasePoint) {
+			this._map._pathRoot.removeChild(this.erasePoint);
+		}
+		this.erasePoint = this._drawErasePoint(latlng);
+		return this;
+	},
 
-    _drawErasePoint: function (latlng) {
-        var namespace = 'http://www.w3.org/2000/svg',
-            vertex = document.createElementNS('http://www.w3.org/2000/svg', 'circle'),
-            point = this._map.latLngToLayerPoint(latlng);
+	_drawErasePoint: function (latlng) {
+		var namespace = 'http://www.w3.org/2000/svg',
+			vertex = document.createElementNS('http://www.w3.org/2000/svg', 'circle'),
+			point = this._map.latLngToLayerPoint(latlng);
 
-        vertex = document.createElementNS(namespace, 'circle');
-        vertex.setAttributeNS(null, 'r', 20);
-        vertex.setAttributeNS(null, 'cx', point.x);
-        vertex.setAttributeNS(null, 'cy', point.y);
-        vertex.setAttributeNS(null, 'fill', '#00ff00');
-        vertex.setAttributeNS(null, 'fill-opacity', 0.3);
-        this._map._pathRoot.appendChild(vertex);
-        return vertex;
-    },
+		vertex = document.createElementNS(namespace, 'circle');
+		vertex.setAttributeNS(null, 'r', 20);
+		vertex.setAttributeNS(null, 'cx', point.x);
+		vertex.setAttributeNS(null, 'cy', point.y);
+		vertex.setAttributeNS(null, 'fill', '#00ff00');
+		vertex.setAttributeNS(null, 'fill-opacity', 0.3);
+		this._map._pathRoot.appendChild(vertex);
+		return vertex;
+	},
 
 });
