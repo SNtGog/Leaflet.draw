@@ -4454,7 +4454,7 @@ L.EditToolbar.Delete = L.Handler.extend({
             this._deletableLayers.eachLayer(function(_layer) {
               var _id;
               if (_layer.properties) {
-                _id = _layer.properties.track || layer.properties.track_cid
+                _id = _layer.properties.track || _layer.properties.track_cid
               }
               if (id === _id) {
                 _this._deletableLayers.removeLayer(_layer);
