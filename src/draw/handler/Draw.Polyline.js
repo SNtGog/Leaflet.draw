@@ -634,9 +634,9 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_appendLatlngs: function(latlngs) {
-			for (var i=0; i<latlngs.length;i++) {
-				this.addVertex(latlngs[i]);
-			}
+        for (var i=0; i<latlngs.length;i++) {
+            this.addVertex(latlngs[i]);
+        }
 	},
 
 	_fireRouteRequest: function(latlng) {

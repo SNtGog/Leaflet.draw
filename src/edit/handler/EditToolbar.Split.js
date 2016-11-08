@@ -252,8 +252,8 @@ L.EditToolbar.Split = L.EditToolbar.Handler.extend({
 			startIndex = startIndex + endIndex;
 			endIndex = startIndex - endIndex;
 			startIndex = startIndex - endIndex;
-			firstPoint = end;
-			endPoint = start;
+			firstPoint = end.latlng;
+			endPoint = start.latlng;
 		}
 		segment.push(firstPoint);
 

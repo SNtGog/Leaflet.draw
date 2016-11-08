@@ -842,9 +842,9 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_appendLatlngs: function(latlngs) {
-			for (var i=0; i<latlngs.length;i++) {
-				this.addVertex(latlngs[i]);
-			}
+        for (var i=0; i<latlngs.length;i++) {
+            this.addVertex(latlngs[i]);
+        }
 	},
 
 	_fireRouteRequest: function(latlng) {
@@ -4731,8 +4731,8 @@ L.EditToolbar.Split = L.EditToolbar.Handler.extend({
 			startIndex = startIndex + endIndex;
 			endIndex = startIndex - endIndex;
 			startIndex = startIndex - endIndex;
-			firstPoint = end;
-			endPoint = start;
+			firstPoint = end.latlng;
+			endPoint = start.latlng;
 		}
 		segment.push(firstPoint);
 
