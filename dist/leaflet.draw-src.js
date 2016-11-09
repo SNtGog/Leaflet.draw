@@ -2468,8 +2468,8 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 			startIndex = startIndex + endIndex;
 			endIndex = startIndex - endIndex;
 			startIndex = startIndex - endIndex;
-			firstPoint = end;
-			endPoint = start;
+			firstPoint = end.latlng;
+			endPoint = start.latlng;
 		}
 		latlngs.push(firstPoint);
 
