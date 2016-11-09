@@ -2449,12 +2449,9 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 				dist1 = L.LineUtil._sqDist(p1, minPoint);
 				dist2 = L.LineUtil._sqDist(p2, minPoint);
 				minPoint = _this._map.unproject(minPoint);
-
-				if (dist1 < dist2) {
-				  minPoint.index = i - 1;
-				} else {
-				  minPoint.index = i;
-				}
+				minPoint.index = i;
+				minPoint.distA = dist1;
+				minPoint.distB = dist2;
 			}
 		}
 		if (minPoint) {
