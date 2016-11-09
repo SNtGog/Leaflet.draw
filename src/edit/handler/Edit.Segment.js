@@ -444,7 +444,8 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 			trackLatLngs = [],
 			firstPoint = start.latlng,
 			endPoint = end.latlng,
-			latlngs = [];
+			latlngs = [],
+			reversed = false;
 
 		if (startIndex > endIndex) {
 			startIndex = startIndex + endIndex;
@@ -452,10 +453,17 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 			startIndex = startIndex - endIndex;
 			firstPoint = end.latlng;
 			endPoint = start.latlng;
+			reversed = true;
 		}
+
 		latlngs.push(firstPoint);
 
 		trackLatLngs = track.getLatLngs().slice(startIndex, endIndex);
+
+		if (reversed) {
+		  trackLatLngs = trackLatLngs.reverse();
+		}
+
 		latlngs = latlngs.concat(trackLatLngs);
 		latlngs.push(endPoint);
 

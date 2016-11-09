@@ -246,7 +246,8 @@ L.EditToolbar.Split = L.EditToolbar.Handler.extend({
 			segment = [],
 			firstPoint = start.latlng,
 			endPoint = end.latlng,
-			latlngs = [];
+			latlngs = [],
+			reversed = false;
 
 		if (startIndex > endIndex) {
 			startIndex = startIndex + endIndex;
@@ -254,10 +255,15 @@ L.EditToolbar.Split = L.EditToolbar.Handler.extend({
 			startIndex = startIndex - endIndex;
 			firstPoint = end.latlng;
 			endPoint = start.latlng;
+			reversed = true;
 		}
 		segment.push(firstPoint);
 
 		latlngs = layer.getLatLngs().slice(startIndex, endIndex);
+
+		if (reversed) {
+		  latlngs = latlngs.reverse();
+		}
 		segment = segment.concat(latlngs);
 		segment.push(endPoint);
 
