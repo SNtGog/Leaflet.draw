@@ -2336,7 +2336,7 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 		var start = this._splitPoints[0],
 			end = this._splitPoints[1];
 
-		latlngs = this._splitTrack(start, end);
+		latlngs = L.SegmentUtil.getSegmentLatlngs(start, end, this._poly._track);
 		this._poly.setLatLngs(latlngs);
 	},
 
@@ -2453,40 +2453,6 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 			minPoint.distance = Math.sqrt(minDistance);
 		}
 		return minPoint;
-	},
-
-	_splitTrack: function (start, end) {
-		var track = this._poly._track,
-			startIndex = start.index,
-			endIndex = end.index,
-			trackLatLngs = [],
-			firstPoint = start.latlng,
-			endPoint = end.latlng,
-			latlngs = [],
-			reversed = false;
-
-		if (startIndex > endIndex) {
-			startIndex = startIndex + endIndex;
-			endIndex = startIndex - endIndex;
-			startIndex = startIndex - endIndex;
-			firstPoint = end.latlng;
-			endPoint = start.latlng;
-			reversed = true;
-		}
-
-		latlngs.push(firstPoint);
-
-		trackLatLngs = track.getLatLngs().slice(startIndex, endIndex);
-
-		if (reversed) {
-		  trackLatLngs = trackLatLngs.reverse();
-		}
-
-		latlngs = latlngs.concat(trackLatLngs);
-		latlngs.push(endPoint);
-
-		return latlngs;
-
 	},
 
 
@@ -4727,34 +4693,8 @@ L.EditToolbar.Split = L.EditToolbar.Handler.extend({
 	},
 
 	_getSegment: function (start, end) {
-		var layer = start.layer,
-			startIndex = start.index,
-			endIndex = end.index,
-			segment = [],
-			firstPoint = start.latlng,
-			endPoint = end.latlng,
-			latlngs = [],
-			reversed = false;
-
-		if (startIndex > endIndex) {
-			startIndex = startIndex + endIndex;
-			endIndex = startIndex - endIndex;
-			startIndex = startIndex - endIndex;
-			firstPoint = end.latlng;
-			endPoint = start.latlng;
-			reversed = true;
-		}
-		segment.push(firstPoint);
-
-		latlngs = layer.getLatLngs().slice(startIndex, endIndex);
-
-		if (reversed) {
-		  latlngs = latlngs.reverse();
-		}
-		segment = segment.concat(latlngs);
-		segment.push(endPoint);
-
-		return L.segment(segment);
+		var latlngs = L.SegmentUtil.getSegmentLatlngs(start, end, start.layer);
+		return L.segment(latlngs);
 
 	},
 

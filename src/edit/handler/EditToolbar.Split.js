@@ -240,34 +240,8 @@ L.EditToolbar.Split = L.EditToolbar.Handler.extend({
 	},
 
 	_getSegment: function (start, end) {
-		var layer = start.layer,
-			startIndex = start.index,
-			endIndex = end.index,
-			segment = [],
-			firstPoint = start.latlng,
-			endPoint = end.latlng,
-			latlngs = [],
-			reversed = false;
-
-		if (startIndex > endIndex) {
-			startIndex = startIndex + endIndex;
-			endIndex = startIndex - endIndex;
-			startIndex = startIndex - endIndex;
-			firstPoint = end.latlng;
-			endPoint = start.latlng;
-			reversed = true;
-		}
-		segment.push(firstPoint);
-
-		latlngs = layer.getLatLngs().slice(startIndex, endIndex);
-
-		if (reversed) {
-		  latlngs = latlngs.reverse();
-		}
-		segment = segment.concat(latlngs);
-		segment.push(endPoint);
-
-		return L.segment(segment);
+		var latlngs = L.SegmentUtil.getSegmentLatlngs(start, end, start.layer);
+		return L.segment(latlngs);
 
 	},
 
