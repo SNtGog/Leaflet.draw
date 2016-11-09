@@ -2441,12 +2441,20 @@ L.Edit.SegmentVerticesEdit = L.Handler.extend({
 		for (var i = 1, len = latlngs.length; i < len; i++) {
 			p1 = project(latlngs[i - 1]);
 			p2 = project(latlngs[i]);
-			var sqDist = L.LineUtil._sqClosestPointOnSegment(p, p1, p2, true);
+			var sqDist = L.LineUtil._sqClosestPointOnSegment(p, p1, p2, true),
+			    dist1, dist2;
 			if (sqDist < minDistance) {
 				minDistance = sqDist;
 				minPoint = L.LineUtil._sqClosestPointOnSegment(p, p1, p2);
+				dist1 = L.LineUtil._sqDist(p1, minPoint);
+				dist2 = L.LineUtil._sqDist(p2, minPoint);
 				minPoint = _this._map.unproject(minPoint);
-				minPoint.index = i;
+
+				if (dist1 < dist2) {
+				  minPoint.index = i - 1;
+				} else {
+				  minPoint.index = i;
+				}
 			}
 		}
 		if (minPoint) {
