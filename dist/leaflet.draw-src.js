@@ -566,7 +566,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_onContextMenu: function(e) {
-		e.originalEvent.preventDefault();
+//		e.originalEvent.preventDefault();
 	},
 
 	_onMarkerMouseOver: function(e) {
