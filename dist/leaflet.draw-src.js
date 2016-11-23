@@ -61,6 +61,13 @@ L.drawLocal = {
                     start: 'Click to start drawing line.',
                     cont: 'Click to continue drawing line.',
                     end: 'Click last point to finish line.'
+                },
+                modes: {
+                    auto: 'Auto',
+                    bicycle: 'Bicycle',
+                    pedestrian: 'Pedestrian',
+                    bus: 'Bus',
+                    transit: 'Transit'
                 }
             },
             rectangle: {
@@ -245,6 +252,8 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		zIndexOffset: 2000 // This should be > than the highest z-index any map layers
 	},
 
+	modes: {},
+
 	initialize: function (map, options) {
 		// if touch, switch to touch icon
 		if (L.Browser.touch) {
@@ -264,6 +273,38 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		// Save the type so super can fire, need to do this as cannot do this.TYPE :(
 		this.type = L.Draw.Polyline.TYPE;
 		this._continueHandlers = [];
+
+		this.modes = {
+            auto: {
+                name: 'auto',
+                title: L.drawLocal.draw.handlers.polyline.modes.auto,
+                callback: this._toggleAutoMode
+            },
+
+            bus: {
+                name: 'bus',
+                title: L.drawLocal.draw.handlers.polyline.modes.bus,
+                callback: this._toggleBusMode
+            },
+
+            bicycle: {
+                name: 'bicycle',
+                title: L.drawLocal.draw.handlers.polyline.modes.bicycle,
+                callback: this._toggleBicycleMode
+            },
+
+            pedestrian: {
+                name: 'pedestrian',
+                title: L.drawLocal.draw.handlers.polyline.modes.pedestrian,
+                callback: this._togglePedestrianMode
+            },
+
+            transit: {
+                name: 'transit',
+                title: L.drawLocal.draw.handlers.polyline.modes.transit,
+                callback: this._toggleTransitMode
+            }
+        };
 
 		L.Draw.Feature.prototype.initialize.call(this, map, options);
 	},
@@ -535,17 +576,20 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 			return;
 		}
 		if (this._mouseDownOrigin) {
-			if (e.originalEvent.ctrlKey && this._markers.length) {
+		    var distance = L.point(e.originalEvent.clientX, e.originalEvent.clientY)
+				    .distanceTo(this._mouseDownOrigin);
+
+            if (Math.abs(distance) >= 9 * (window.devicePixelRatio || 1)) {
+              this._mouseDownOrigin = null;
+              return;
+            }
+
+			if ((e.originalEvent.ctrlKey && this._markers.length) ||
+			    (this._markers.length && this._activeMode)) {
 				this._fireRouteRequest(e.latlng);
 			} else {
-				// We detect clicks within a certain tolerance, otherwise let it
-				// be interpreted as a drag by the map
-				var distance = L.point(e.originalEvent.clientX, e.originalEvent.clientY)
-					.distanceTo(this._mouseDownOrigin);
-				if (Math.abs(distance) < 9 * (window.devicePixelRatio || 1)) {
-					this.addVertex(e.latlng);
-					this._counter++;
-				}
+                this.addVertex(e.latlng);
+                this._counter++;
 			}
 		}
 		this._mouseDownOrigin = null;
@@ -609,7 +653,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
                 last = markers[markers.length - 1],
                 lastLatlng = last.getLatLng();
 
-			if (e.originalEvent.ctrlKey) {
+			if (e.originalEvent.ctrlKey || this._activeMode) {
 				this._fireRouteRequest(latlng, lastLatlng);
 			} else {
 				this.addVertex(latlng);
@@ -887,7 +931,8 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 				if (lastLatlng) {
 				  _this.addSegment(latlngs);
 				}
-			}
+			},
+			mode: _this._activeMode ? _this._activeMode.name : 'auto'
 		});
 	},
 
@@ -932,7 +977,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 			finishShape = true;
 		}
 
-		if (e.originalEvent.originalEvent.ctrlKey) {
+		if (e.originalEvent.originalEvent.ctrlKey || this._activeMode) {
 			this._map.fireEvent('request:route', {
 				latLngs: [_latLngs[_latLngs.length-1], e.latlng],
 				callback: function(latlngs) {
@@ -940,7 +985,9 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 						_this._appendLatlngs(latlngs.splice(1,latlngs.length - 2));
 					}
 					continuePolyline(_this, latLngsToAdd, finishShape);
-				}
+				},
+				mode: _this._activeMode ? _this._activeMode.name : 'auto'
+
 			});
 		} else {
 			continuePolyline(this, latLngsToAdd, finishShape);
@@ -975,7 +1022,39 @@ L.Draw.Polyline = L.Draw.Feature.extend({
         type: 'segment'
       };
       return segment;
-	}
+	},
+
+	_toggleMode: function(newmode) {
+	  if (this._activeMode) {
+	    this.fire('disabled:'+this._activeMode.name, this._activeMode);
+	  }
+	  if (this._activeMode === newmode) {
+	    this._activeMode = null;
+	  } else if (newmode) {
+	    this._activeMode = newmode;
+	    this.fire('enabled:'+newmode.name, newmode);
+	  }
+	},
+
+    _toggleAutoMode: function() {
+        this._toggleMode(this.modes.auto);
+    },
+
+    _toggleBusMode: function() {
+        this._toggleMode(this.modes.bus);
+    },
+
+    _toggleBicycleMode: function() {
+        this._toggleMode(this.modes.bicycle);
+    },
+
+    _togglePedestrianMode: function() {
+        this._toggleMode(this.modes.pedestrian);
+    },
+
+    _toggleTransitMode: function() {
+        this._toggleMode(this.modes.transit);
+    }
 
 });
 
@@ -3575,6 +3654,7 @@ L.Toolbar = L.Class.extend({
 
 	removeToolbar: function () {
 		// Dispose each handler
+		var i = 0;
 		for (var handlerId in this._modes) {
 			if (this._modes.hasOwnProperty(handlerId)) {
 				// Unbind handler button
@@ -3583,6 +3663,18 @@ L.Toolbar = L.Class.extend({
 					this._modes[handlerId].handler.enable,
 					this._modes[handlerId].handler
 				);
+
+                var submenu = this._modes[handlerId].submenu;
+				if (submenu && submenu.buttons.length) {
+				    for (i = 0; i < submenu.buttons.length; i++) {
+				        this._disposeButton(
+                            submenu.buttons[i].el,
+                            submenu.buttons[i].mode.callback,
+                            this._modes[handlerId].handler
+                        );
+				    }
+
+				}
 
 				// Make sure is disabled
 				this._modes[handlerId].handler.disable();
@@ -3596,7 +3688,7 @@ L.Toolbar = L.Class.extend({
 		this._modes = {};
 
 		// Dispose the actions toolbar
-		for (var i = 0, l = this._actionButtons.length; i < l; i++) {
+		for (i = 0, l = this._actionButtons.length; i < l; i++) {
 			this._disposeButton(
 				this._actionButtons[i].button,
 				this._actionButtons[i].callback,
@@ -3614,14 +3706,17 @@ L.Toolbar = L.Class.extend({
 
 		this._modes[type].handler = handler;
 
-		this._modes[type].button = this._createButton({
+		var button = this._createButton({
 			type: type,
 			title: buttonTitle,
 			className: classNamePredix + '-' + type,
 			container: container,
 			callback: this._modes[type].handler.enable,
 			context: this._modes[type].handler
-		});
+		}, this._modes[type].handler.modes);
+
+		this._modes[type].button = button.button;
+		this._modes[type].submenu = button.submenu;
 
 		this._modes[type].buttonIndex = buttonIndex;
 
@@ -3630,27 +3725,80 @@ L.Toolbar = L.Class.extend({
 			.on('disabled', this._handlerDeactivated, this);
 	},
 
-	_createButton: function (options) {
+	_createButton: function (options, handlerModes) {
 
-		var link = L.DomUtil.create('a', options.className || '', options.container);
-		link.href = '#';
+		var button = L.DomUtil.create(options.tagName || 'div', options.className || '', options.container),
+		    submenu;
 
 		if (options.text) {
-			link.innerHTML = options.text;
+			button.innerHTML = options.text;
 		}
 
 		if (options.title) {
-			link.title = options.title;
+			button.title = options.title;
+		}
+
+		if (options.tagName === 'a') {
+		    button.href = '#';
 		}
 
 		L.DomEvent
-			.on(link, 'click', L.DomEvent.stopPropagation)
-			.on(link, 'mousedown', L.DomEvent.stopPropagation)
-			.on(link, 'dblclick', L.DomEvent.stopPropagation)
-			.on(link, 'click', L.DomEvent.preventDefault)
-			.on(link, 'click', options.callback, options.context);
+			.on(button, 'click', L.DomEvent.stopPropagation)
+			.on(button, 'mousedown', L.DomEvent.stopPropagation)
+			.on(button, 'dblclick', L.DomEvent.stopPropagation)
+			.on(button, 'click', L.DomEvent.preventDefault)
+			.on(button, 'click', options.callback, options.context)
+			.on(button, 'contextmenu', L.DomEvent.stopPropagation);
 
-		return link;
+	    if (!handlerModes) {
+	      return {button: button, submenu: null};
+	    }
+
+	    submenu = {
+	      el: L.DomUtil.create('div', 'leaflet-bar leaflet-draw-toolbar-submenu'),
+	      buttons: []
+	    }
+	    button.appendChild(submenu.el);
+
+	    for (var modeId in handlerModes) {
+            var mode = handlerModes[modeId],
+                newbutton = {
+                  el: this._createSubmenuButton(submenu, mode, options),
+                  mode: mode,
+                };
+
+            submenu.buttons.push(newbutton);
+            submenu.el.appendChild(newbutton.el);
+
+            options.context
+              .on('enabled:'+mode.name, this._handlerModeActivated, this)
+              .on('disabled:'+mode.name, this._handlerModeDeactivated, this);
+	    }
+
+		return {
+		  button: button,
+		  submenu: submenu
+		};
+	},
+
+	_createSubmenuButton: function(submenu, mode, options) {
+	    var modeName = mode.name || '',
+	        name = options.className ? options.className + '-' + modeName : modeName,
+	        button = L.DomUtil.create('div', name || '', options.container);
+
+	    if (mode.title) {
+			button.title = mode.title;
+		}
+
+        L.DomEvent
+            .on(button, 'click', L.DomEvent.stopPropagation)
+            .on(button, 'mousedown', L.DomEvent.stopPropagation)
+            .on(button, 'dblclick', L.DomEvent.stopPropagation)
+            .on(button, 'click', L.DomEvent.preventDefault)
+            .on(button, 'click', mode.callback, options.context)
+            .on(button, 'contextmenu', L.DomEvent.stopPropagation);
+
+        return button;
 	},
 
 	_disposeButton: function (button, callback) {
@@ -3659,7 +3807,8 @@ L.Toolbar = L.Class.extend({
 			.off(button, 'mousedown', L.DomEvent.stopPropagation)
 			.off(button, 'dblclick', L.DomEvent.stopPropagation)
 			.off(button, 'click', L.DomEvent.preventDefault)
-			.off(button, 'click', callback);
+			.off(button, 'click', callback)
+			.off(button, 'contextmenu', L.DomEvent.stopPropagation);
 	},
 
 	_handlerActivated: function (e) {
@@ -3684,6 +3833,49 @@ L.Toolbar = L.Class.extend({
 		this._activeMode = null;
 
 		this.fire('disable');
+	},
+
+	_handlerModeActivated: function(mode) {
+        for (var handlerId in this._modes) {
+            if (!this._modes.hasOwnProperty(handlerId)) {
+              return;
+            }
+
+            var submenu = this._modes[handlerId].submenu;
+            if (!submenu || !submenu.buttons.length) {
+              return;
+            }
+
+            for (i = 0; i < submenu.buttons.length; i++) {
+                var button = submenu.buttons[i];
+                if (button.mode.callback === mode.callback) {
+                  L.DomUtil.addClass(button.el, 'leaflet-draw-toolbar-button-enabled');
+                }
+                else {
+                  L.DomUtil.removeClass(button.el, 'leaflet-draw-toolbar-button-enabled');
+                }
+            }
+        }
+	},
+
+	_handlerModeDeactivated: function(mode) {
+        for (var handlerId in this._modes) {
+            if (!this._modes.hasOwnProperty(handlerId)) {
+              return;
+            }
+
+            var submenu = this._modes[handlerId].submenu;
+            if (!submenu || !submenu.buttons.length) {
+              return;
+            }
+
+            for (i = 0; i < submenu.buttons.length; i++) {
+                var button = submenu.buttons[i];
+                if (button.mode.callback === mode.callback) {
+                  L.DomUtil.removeClass(button.el, 'leaflet-draw-toolbar-button-enabled');
+                }
+            }
+        }
 	},
 
 	_createActions: function (handler) {
@@ -3711,6 +3903,7 @@ L.Toolbar = L.Class.extend({
 			li = L.DomUtil.create('li', '', container);
 
 			button = this._createButton({
+			    tagName: 'a',
 				title: buttons[i].title,
 				text: buttons[i].text,
 				container: li,

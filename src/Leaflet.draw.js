@@ -54,6 +54,13 @@ L.drawLocal = {
                     start: 'Click to start drawing line.',
                     cont: 'Click to continue drawing line.',
                     end: 'Click last point to finish line.'
+                },
+                modes: {
+                    auto: 'Auto',
+                    bicycle: 'Bicycle',
+                    pedestrian: 'Pedestrian',
+                    bus: 'Bus',
+                    transit: 'Transit'
                 }
             },
             rectangle: {

@@ -37,6 +37,8 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		zIndexOffset: 2000 // This should be > than the highest z-index any map layers
 	},
 
+	modes: {},
+
 	initialize: function (map, options) {
 		// if touch, switch to touch icon
 		if (L.Browser.touch) {
@@ -56,6 +58,38 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		// Save the type so super can fire, need to do this as cannot do this.TYPE :(
 		this.type = L.Draw.Polyline.TYPE;
 		this._continueHandlers = [];
+
+		this.modes = {
+            auto: {
+                name: 'auto',
+                title: L.drawLocal.draw.handlers.polyline.modes.auto,
+                callback: this._toggleAutoMode
+            },
+
+            bus: {
+                name: 'bus',
+                title: L.drawLocal.draw.handlers.polyline.modes.bus,
+                callback: this._toggleBusMode
+            },
+
+            bicycle: {
+                name: 'bicycle',
+                title: L.drawLocal.draw.handlers.polyline.modes.bicycle,
+                callback: this._toggleBicycleMode
+            },
+
+            pedestrian: {
+                name: 'pedestrian',
+                title: L.drawLocal.draw.handlers.polyline.modes.pedestrian,
+                callback: this._togglePedestrianMode
+            },
+
+            transit: {
+                name: 'transit',
+                title: L.drawLocal.draw.handlers.polyline.modes.transit,
+                callback: this._toggleTransitMode
+            }
+        };
 
 		L.Draw.Feature.prototype.initialize.call(this, map, options);
 	},
@@ -327,17 +361,20 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 			return;
 		}
 		if (this._mouseDownOrigin) {
-			if (e.originalEvent.ctrlKey && this._markers.length) {
+		    var distance = L.point(e.originalEvent.clientX, e.originalEvent.clientY)
+				    .distanceTo(this._mouseDownOrigin);
+
+            if (Math.abs(distance) >= 9 * (window.devicePixelRatio || 1)) {
+              this._mouseDownOrigin = null;
+              return;
+            }
+
+			if ((e.originalEvent.ctrlKey && this._markers.length) ||
+			    (this._markers.length && this._activeMode)) {
 				this._fireRouteRequest(e.latlng);
 			} else {
-				// We detect clicks within a certain tolerance, otherwise let it
-				// be interpreted as a drag by the map
-				var distance = L.point(e.originalEvent.clientX, e.originalEvent.clientY)
-					.distanceTo(this._mouseDownOrigin);
-				if (Math.abs(distance) < 9 * (window.devicePixelRatio || 1)) {
-					this.addVertex(e.latlng);
-					this._counter++;
-				}
+                this.addVertex(e.latlng);
+                this._counter++;
 			}
 		}
 		this._mouseDownOrigin = null;
@@ -401,7 +438,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
                 last = markers[markers.length - 1],
                 lastLatlng = last.getLatLng();
 
-			if (e.originalEvent.ctrlKey) {
+			if (e.originalEvent.ctrlKey || this._activeMode) {
 				this._fireRouteRequest(latlng, lastLatlng);
 			} else {
 				this.addVertex(latlng);
@@ -679,7 +716,8 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 				if (lastLatlng) {
 				  _this.addSegment(latlngs);
 				}
-			}
+			},
+			mode: _this._activeMode ? _this._activeMode.name : 'auto'
 		});
 	},
 
@@ -724,7 +762,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 			finishShape = true;
 		}
 
-		if (e.originalEvent.originalEvent.ctrlKey) {
+		if (e.originalEvent.originalEvent.ctrlKey || this._activeMode) {
 			this._map.fireEvent('request:route', {
 				latLngs: [_latLngs[_latLngs.length-1], e.latlng],
 				callback: function(latlngs) {
@@ -732,7 +770,9 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 						_this._appendLatlngs(latlngs.splice(1,latlngs.length - 2));
 					}
 					continuePolyline(_this, latLngsToAdd, finishShape);
-				}
+				},
+				mode: _this._activeMode ? _this._activeMode.name : 'auto'
+
 			});
 		} else {
 			continuePolyline(this, latLngsToAdd, finishShape);
@@ -767,7 +807,39 @@ L.Draw.Polyline = L.Draw.Feature.extend({
         type: 'segment'
       };
       return segment;
-	}
+	},
+
+	_toggleMode: function(newmode) {
+	  if (this._activeMode) {
+	    this.fire('disabled:'+this._activeMode.name, this._activeMode);
+	  }
+	  if (this._activeMode === newmode) {
+	    this._activeMode = null;
+	  } else if (newmode) {
+	    this._activeMode = newmode;
+	    this.fire('enabled:'+newmode.name, newmode);
+	  }
+	},
+
+    _toggleAutoMode: function() {
+        this._toggleMode(this.modes.auto);
+    },
+
+    _toggleBusMode: function() {
+        this._toggleMode(this.modes.bus);
+    },
+
+    _toggleBicycleMode: function() {
+        this._toggleMode(this.modes.bicycle);
+    },
+
+    _togglePedestrianMode: function() {
+        this._toggleMode(this.modes.pedestrian);
+    },
+
+    _toggleTransitMode: function() {
+        this._toggleMode(this.modes.transit);
+    }
 
 });
 

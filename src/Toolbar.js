@@ -61,6 +61,7 @@ L.Toolbar = L.Class.extend({
 
 	removeToolbar: function () {
 		// Dispose each handler
+		var i = 0;
 		for (var handlerId in this._modes) {
 			if (this._modes.hasOwnProperty(handlerId)) {
 				// Unbind handler button
@@ -69,6 +70,18 @@ L.Toolbar = L.Class.extend({
 					this._modes[handlerId].handler.enable,
 					this._modes[handlerId].handler
 				);
+
+                var submenu = this._modes[handlerId].submenu;
+				if (submenu && submenu.buttons.length) {
+				    for (i = 0; i < submenu.buttons.length; i++) {
+				        this._disposeButton(
+                            submenu.buttons[i].el,
+                            submenu.buttons[i].mode.callback,
+                            this._modes[handlerId].handler
+                        );
+				    }
+
+				}
 
 				// Make sure is disabled
 				this._modes[handlerId].handler.disable();
@@ -82,7 +95,7 @@ L.Toolbar = L.Class.extend({
 		this._modes = {};
 
 		// Dispose the actions toolbar
-		for (var i = 0, l = this._actionButtons.length; i < l; i++) {
+		for (i = 0, l = this._actionButtons.length; i < l; i++) {
 			this._disposeButton(
 				this._actionButtons[i].button,
 				this._actionButtons[i].callback,
@@ -100,14 +113,17 @@ L.Toolbar = L.Class.extend({
 
 		this._modes[type].handler = handler;
 
-		this._modes[type].button = this._createButton({
+		var button = this._createButton({
 			type: type,
 			title: buttonTitle,
 			className: classNamePredix + '-' + type,
 			container: container,
 			callback: this._modes[type].handler.enable,
 			context: this._modes[type].handler
-		});
+		}, this._modes[type].handler.modes);
+
+		this._modes[type].button = button.button;
+		this._modes[type].submenu = button.submenu;
 
 		this._modes[type].buttonIndex = buttonIndex;
 
@@ -116,27 +132,80 @@ L.Toolbar = L.Class.extend({
 			.on('disabled', this._handlerDeactivated, this);
 	},
 
-	_createButton: function (options) {
+	_createButton: function (options, handlerModes) {
 
-		var link = L.DomUtil.create('a', options.className || '', options.container);
-		link.href = '#';
+		var button = L.DomUtil.create(options.tagName || 'div', options.className || '', options.container),
+		    submenu;
 
 		if (options.text) {
-			link.innerHTML = options.text;
+			button.innerHTML = options.text;
 		}
 
 		if (options.title) {
-			link.title = options.title;
+			button.title = options.title;
+		}
+
+		if (options.tagName === 'a') {
+		    button.href = '#';
 		}
 
 		L.DomEvent
-			.on(link, 'click', L.DomEvent.stopPropagation)
-			.on(link, 'mousedown', L.DomEvent.stopPropagation)
-			.on(link, 'dblclick', L.DomEvent.stopPropagation)
-			.on(link, 'click', L.DomEvent.preventDefault)
-			.on(link, 'click', options.callback, options.context);
+			.on(button, 'click', L.DomEvent.stopPropagation)
+			.on(button, 'mousedown', L.DomEvent.stopPropagation)
+			.on(button, 'dblclick', L.DomEvent.stopPropagation)
+			.on(button, 'click', L.DomEvent.preventDefault)
+			.on(button, 'click', options.callback, options.context)
+			.on(button, 'contextmenu', L.DomEvent.stopPropagation);
 
-		return link;
+	    if (!handlerModes) {
+	      return {button: button, submenu: null};
+	    }
+
+	    submenu = {
+	      el: L.DomUtil.create('div', 'leaflet-bar leaflet-draw-toolbar-submenu'),
+	      buttons: []
+	    }
+	    button.appendChild(submenu.el);
+
+	    for (var modeId in handlerModes) {
+            var mode = handlerModes[modeId],
+                newbutton = {
+                  el: this._createSubmenuButton(submenu, mode, options),
+                  mode: mode,
+                };
+
+            submenu.buttons.push(newbutton);
+            submenu.el.appendChild(newbutton.el);
+
+            options.context
+              .on('enabled:'+mode.name, this._handlerModeActivated, this)
+              .on('disabled:'+mode.name, this._handlerModeDeactivated, this);
+	    }
+
+		return {
+		  button: button,
+		  submenu: submenu
+		};
+	},
+
+	_createSubmenuButton: function(submenu, mode, options) {
+	    var modeName = mode.name || '',
+	        name = options.className ? options.className + '-' + modeName : modeName,
+	        button = L.DomUtil.create('div', name || '', options.container);
+
+	    if (mode.title) {
+			button.title = mode.title;
+		}
+
+        L.DomEvent
+            .on(button, 'click', L.DomEvent.stopPropagation)
+            .on(button, 'mousedown', L.DomEvent.stopPropagation)
+            .on(button, 'dblclick', L.DomEvent.stopPropagation)
+            .on(button, 'click', L.DomEvent.preventDefault)
+            .on(button, 'click', mode.callback, options.context)
+            .on(button, 'contextmenu', L.DomEvent.stopPropagation);
+
+        return button;
 	},
 
 	_disposeButton: function (button, callback) {
@@ -145,7 +214,8 @@ L.Toolbar = L.Class.extend({
 			.off(button, 'mousedown', L.DomEvent.stopPropagation)
 			.off(button, 'dblclick', L.DomEvent.stopPropagation)
 			.off(button, 'click', L.DomEvent.preventDefault)
-			.off(button, 'click', callback);
+			.off(button, 'click', callback)
+			.off(button, 'contextmenu', L.DomEvent.stopPropagation);
 	},
 
 	_handlerActivated: function (e) {
@@ -170,6 +240,49 @@ L.Toolbar = L.Class.extend({
 		this._activeMode = null;
 
 		this.fire('disable');
+	},
+
+	_handlerModeActivated: function(mode) {
+        for (var handlerId in this._modes) {
+            if (!this._modes.hasOwnProperty(handlerId)) {
+              return;
+            }
+
+            var submenu = this._modes[handlerId].submenu;
+            if (!submenu || !submenu.buttons.length) {
+              return;
+            }
+
+            for (i = 0; i < submenu.buttons.length; i++) {
+                var button = submenu.buttons[i];
+                if (button.mode.callback === mode.callback) {
+                  L.DomUtil.addClass(button.el, 'leaflet-draw-toolbar-button-enabled');
+                }
+                else {
+                  L.DomUtil.removeClass(button.el, 'leaflet-draw-toolbar-button-enabled');
+                }
+            }
+        }
+	},
+
+	_handlerModeDeactivated: function(mode) {
+        for (var handlerId in this._modes) {
+            if (!this._modes.hasOwnProperty(handlerId)) {
+              return;
+            }
+
+            var submenu = this._modes[handlerId].submenu;
+            if (!submenu || !submenu.buttons.length) {
+              return;
+            }
+
+            for (i = 0; i < submenu.buttons.length; i++) {
+                var button = submenu.buttons[i];
+                if (button.mode.callback === mode.callback) {
+                  L.DomUtil.removeClass(button.el, 'leaflet-draw-toolbar-button-enabled');
+                }
+            }
+        }
 	},
 
 	_createActions: function (handler) {
@@ -197,6 +310,7 @@ L.Toolbar = L.Class.extend({
 			li = L.DomUtil.create('li', '', container);
 
 			button = this._createButton({
+			    tagName: 'a',
 				title: buttons[i].title,
 				text: buttons[i].text,
 				container: li,
