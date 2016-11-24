@@ -610,6 +610,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_onContextMenu: function(e) {
+	  e.handler = this;
       this._map.fire('contextmenu', e);
 	},
 
