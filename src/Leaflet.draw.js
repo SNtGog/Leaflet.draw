@@ -57,10 +57,15 @@ L.drawLocal = {
                 },
                 modes: {
                     auto: 'Auto',
+                    autoTooltip: 'Auto',
                     bicycle: 'Bicycle',
+                    bicycleTooltip: 'Bicycle',
                     pedestrian: 'Pedestrian',
+                    pedestrianTooltip: 'Pedestrian',
                     bus: 'Bus',
-                    transit: 'Transit'
+                    busTooltip: 'Bus',
+                    transit: 'Transit',
+                    transitTooltip: 'Transit'
                 }
             },
             rectangle: {

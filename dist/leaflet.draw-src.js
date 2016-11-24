@@ -64,10 +64,15 @@ L.drawLocal = {
                 },
                 modes: {
                     auto: 'Auto',
+                    autoTooltip: 'Auto',
                     bicycle: 'Bicycle',
+                    bicycleTooltip: 'Bicycle',
                     pedestrian: 'Pedestrian',
+                    pedestrianTooltip: 'Pedestrian',
                     bus: 'Bus',
-                    transit: 'Transit'
+                    busTooltip: 'Bus',
+                    transit: 'Transit',
+                    transitTooltip: 'Transit'
                 }
             },
             rectangle: {
@@ -278,30 +283,35 @@ L.Draw.Polyline = L.Draw.Feature.extend({
             auto: {
                 name: 'auto',
                 title: L.drawLocal.draw.handlers.polyline.modes.auto,
+                tooltip: L.drawLocal.draw.handlers.polyline.modes.autoTooltip,
                 callback: this._toggleAutoMode
             },
 
             bus: {
                 name: 'bus',
                 title: L.drawLocal.draw.handlers.polyline.modes.bus,
+                tooltip: L.drawLocal.draw.handlers.polyline.modes.busTooltip,
                 callback: this._toggleBusMode
             },
 
             bicycle: {
                 name: 'bicycle',
                 title: L.drawLocal.draw.handlers.polyline.modes.bicycle,
+                tooltip: L.drawLocal.draw.handlers.polyline.modes.bicycleTooltip,
                 callback: this._toggleBicycleMode
             },
 
             pedestrian: {
                 name: 'pedestrian',
                 title: L.drawLocal.draw.handlers.polyline.modes.pedestrian,
+                tooltip: L.drawLocal.draw.handlers.polyline.modes.pedestrianTooltip,
                 callback: this._togglePedestrianMode
             },
 
             transit: {
                 name: 'transit',
                 title: L.drawLocal.draw.handlers.polyline.modes.transit,
+                tooltip: L.drawLocal.draw.handlers.polyline.modes.transitTooltip,
                 callback: this._toggleTransitMode
             }
         };
@@ -3809,7 +3819,8 @@ L.Toolbar = L.Class.extend({
             .on(button, 'dblclick', L.DomEvent.stopPropagation)
             .on(button, 'click', L.DomEvent.preventDefault)
             .on(button, 'click', mode.callback, options.context)
-            .on(button, 'contextmenu', L.DomEvent.stopPropagation);
+            .on(button, 'contextmenu', L.DomEvent.stopPropagation)
+            .on(button, 'mousemove', this._onSubmenuMousemove, {mode: mode, context: options.context});
 
         return button;
 	},
@@ -3821,7 +3832,19 @@ L.Toolbar = L.Class.extend({
 			.off(button, 'dblclick', L.DomEvent.stopPropagation)
 			.off(button, 'click', L.DomEvent.preventDefault)
 			.off(button, 'click', callback)
-			.off(button, 'contextmenu', L.DomEvent.stopPropagation);
+			.off(button, 'contextmenu', L.DomEvent.stopPropagation)
+			.off(button, 'mousemove', this._onSubmenuMousemove);
+	},
+
+	_onSubmenuMousemove: function(e) {
+	  e.stopPropagation();
+	  if (this.context._tooltip) {
+	    this.context._tooltip.updateContent({
+            text: this.mode.tooltip || ''
+        });
+        var point = this.context._map.mouseEventToLayerPoint(e);
+        this.context._tooltip._updatePosition(point);
+	  }
 	},
 
 	_handlerActivated: function (e) {
@@ -4010,14 +4033,16 @@ L.Tooltip = L.Class.extend({
 	},
 
 	updatePosition: function (latlng) {
-		var pos = this._map.latLngToLayerPoint(latlng),
-			tooltipContainer = this._container;
+		var pos = this._map.latLngToLayerPoint(latlng);
 
+		return this._updatePosition(pos);
+	},
+
+	_updatePosition: function (pos) {
 		if (this._container) {
-			tooltipContainer.style.visibility = 'inherit';
-			L.DomUtil.setPosition(tooltipContainer, pos);
+			this._container.style.visibility = 'inherit';
+			L.DomUtil.setPosition(this._container, pos);
 		}
-
 		return this;
 	},
 

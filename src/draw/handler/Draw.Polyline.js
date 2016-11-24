@@ -63,30 +63,35 @@ L.Draw.Polyline = L.Draw.Feature.extend({
             auto: {
                 name: 'auto',
                 title: L.drawLocal.draw.handlers.polyline.modes.auto,
+                tooltip: L.drawLocal.draw.handlers.polyline.modes.autoTooltip,
                 callback: this._toggleAutoMode
             },
 
             bus: {
                 name: 'bus',
                 title: L.drawLocal.draw.handlers.polyline.modes.bus,
+                tooltip: L.drawLocal.draw.handlers.polyline.modes.busTooltip,
                 callback: this._toggleBusMode
             },
 
             bicycle: {
                 name: 'bicycle',
                 title: L.drawLocal.draw.handlers.polyline.modes.bicycle,
+                tooltip: L.drawLocal.draw.handlers.polyline.modes.bicycleTooltip,
                 callback: this._toggleBicycleMode
             },
 
             pedestrian: {
                 name: 'pedestrian',
                 title: L.drawLocal.draw.handlers.polyline.modes.pedestrian,
+                tooltip: L.drawLocal.draw.handlers.polyline.modes.pedestrianTooltip,
                 callback: this._togglePedestrianMode
             },
 
             transit: {
                 name: 'transit',
                 title: L.drawLocal.draw.handlers.polyline.modes.transit,
+                tooltip: L.drawLocal.draw.handlers.polyline.modes.transitTooltip,
                 callback: this._toggleTransitMode
             }
         };

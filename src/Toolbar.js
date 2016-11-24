@@ -203,7 +203,8 @@ L.Toolbar = L.Class.extend({
             .on(button, 'dblclick', L.DomEvent.stopPropagation)
             .on(button, 'click', L.DomEvent.preventDefault)
             .on(button, 'click', mode.callback, options.context)
-            .on(button, 'contextmenu', L.DomEvent.stopPropagation);
+            .on(button, 'contextmenu', L.DomEvent.stopPropagation)
+            .on(button, 'mousemove', this._onSubmenuMousemove, {mode: mode, context: options.context});
 
         return button;
 	},
@@ -215,7 +216,19 @@ L.Toolbar = L.Class.extend({
 			.off(button, 'dblclick', L.DomEvent.stopPropagation)
 			.off(button, 'click', L.DomEvent.preventDefault)
 			.off(button, 'click', callback)
-			.off(button, 'contextmenu', L.DomEvent.stopPropagation);
+			.off(button, 'contextmenu', L.DomEvent.stopPropagation)
+			.off(button, 'mousemove', this._onSubmenuMousemove);
+	},
+
+	_onSubmenuMousemove: function(e) {
+	  e.stopPropagation();
+	  if (this.context._tooltip) {
+	    this.context._tooltip.updateContent({
+            text: this.mode.tooltip || ''
+        });
+        var point = this.context._map.mouseEventToLayerPoint(e);
+        this.context._tooltip._updatePosition(point);
+	  }
 	},
 
 	_handlerActivated: function (e) {
