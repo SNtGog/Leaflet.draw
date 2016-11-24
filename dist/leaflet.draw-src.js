@@ -1037,6 +1037,18 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	  }
 	},
 
+	_setMode: function(newmode) {
+	  if (this._activeMode) {
+	    this.fire('disabled:'+this._activeMode.name, this._activeMode);
+	  }
+	  if (!newmode) {
+	    this._activeMode = null;
+	  } else {
+	    this._activeMode = newmode;
+	    this.fire('enabled:'+newmode.name, newmode);
+	  }
+	},
+
     _toggleAutoMode: function() {
         this._toggleMode(this.modes.auto);
     },
