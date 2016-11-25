@@ -309,7 +309,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
             },
 
             multimodal: {
-                name: 'transit',
+                name: 'multimodal',
                 title: L.drawLocal.draw.handlers.polyline.modes.multimodal,
                 tooltip: L.drawLocal.draw.handlers.polyline.modes.multimodalTooltip,
                 callback: this._toggleMultimodalMode
