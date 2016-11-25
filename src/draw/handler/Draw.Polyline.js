@@ -92,7 +92,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
                 name: 'transit',
                 title: L.drawLocal.draw.handlers.polyline.modes.transit,
                 tooltip: L.drawLocal.draw.handlers.polyline.modes.transitTooltip,
-                callback: this._toggleTransitMode
+                callback: this._toggleMultimodalMode
             }
         };
 
@@ -855,8 +855,8 @@ L.Draw.Polyline = L.Draw.Feature.extend({
         this._toggleMode(this.modes.pedestrian);
     },
 
-    _toggleTransitMode: function() {
-        this._toggleMode(this.modes.transit);
+    _toggleMultimodalMode: function() {
+        this._toggleMode(this.modes.multimodal);
     }
 
 });
