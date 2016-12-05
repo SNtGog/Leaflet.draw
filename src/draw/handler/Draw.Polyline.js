@@ -245,6 +245,8 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 
 		if (poly.getLatLngs().length < 2) {
 			this._map.removeLayer(poly);
+		} else {
+		    this._markerGroup.addLayer(this._markers[this._markers.length]);
 		}
 
 		this._vertexChanged(latlng, false);
@@ -259,6 +261,11 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		}
 		else if (this._errorShown) {
 			this._hideErrorTooltip();
+		}
+
+		if (markersLength > 1) {
+		  var last = this._markers[markersLength - 1];
+		  this._markerGroup.removeLayer(last);
 		}
 
 		this._markers.push(this._createMarker(latlng));
