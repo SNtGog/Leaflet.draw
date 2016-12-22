@@ -743,16 +743,17 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 			i = 0;
 
 		var continuePolyline = function(context, latLngs, finish) {
-		    var cLatLngs = context._poly.getLatLngs();
-
-			if ((!context._markers.length && e.index === 0) ||
-					(context._markers.length && e.index !== 0)) {
-				context._hiddenPoly.reversed = true;
-				latLngs.reverse()
-			}
-
-			var newLatLngs = _latLngs.concat(latLngs);
-			context._poly.setLatLngs(newLatLngs);
+		    if ((!context._markers.length && e.index === 0) ||
+  					(context._markers.length && e.index !== 0)) {
+  				context._hiddenPoly.reversed = true;
+ 				for (i = latLngs.length-1; i >= 0; i--) {
+ 					context.addVertex(latLngs[i]);
+ 				}
+ 			} else {
+ 				for (i = 0; i < latLngs.length; i++) {
+ 					context.addVertex(latLngs[i]);
+ 				}
+  			}
 
 			if (finish) {
 				context._finishShape();
