@@ -491,6 +491,10 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 	},
 
 	_updateGuide: function (newPos) {
+	    if (!this._markers) {
+	      return;
+	    }
+
 		var markerCount = this._markers.length;
 
 		if (markerCount > 0) {
