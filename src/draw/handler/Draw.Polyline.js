@@ -374,7 +374,7 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		}
 		if (this._mouseDownOrigin) {
 		    var distance = L.point(e.originalEvent.clientX, e.originalEvent.clientY)
-				    .distanceTo(this._mouseDownOrigin);
+              .distanceTo(this._mouseDownOrigin);
 
             if (Math.abs(distance) >= 9 * (window.devicePixelRatio || 1)) {
               this._mouseDownOrigin = null;
@@ -776,17 +776,19 @@ L.Draw.Polyline = L.Draw.Feature.extend({
 		}
 
 		if (e.originalEvent.originalEvent.ctrlKey || this._activeMode) {
-			this._map.fireEvent('request:route', {
-				latLngs: [_latLngs[_latLngs.length-1], e.latlng],
-				callback: function(latlngs) {
-					if (latlngs.length > 3) {
-						_this._appendLatlngs(latlngs.splice(1,latlngs.length - 2));
-					}
-					continuePolyline(_this, latLngsToAdd, finishShape);
-				},
-				mode: _this._activeMode ? _this._activeMode.name : 'auto'
+		    if (_latLngs.length > 1) {
+                this._map.fireEvent('request:route', {
+                    latLngs: [_latLngs[_latLngs.length-1], e.latlng],
+                    callback: function(latlngs) {
+                        if (latlngs.length > 3) {
+                            _this._appendLatlngs(latlngs.splice(1,latlngs.length - 2));
+                        }
+                        continuePolyline(_this, latLngsToAdd, finishShape);
+                    },
+                    mode: _this._activeMode ? _this._activeMode.name : 'auto'
 
-			});
+                });
+		    }
 		} else {
 			continuePolyline(this, latLngsToAdd, finishShape);
 		}
