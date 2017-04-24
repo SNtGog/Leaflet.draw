@@ -1057,12 +1057,13 @@ L.Draw.Marker = L.Draw.Feature.extend({
 		L.Draw.Feature.prototype.removeHooks.call(this);
 
 		if (this._map) {
+		    this._map
+                .off('click', this._onClick, this)
+                .off('click', this._onTouch, this);
+
 			if (this._marker) {
 				this._marker.off('click', this._onClick, this);
-				this._map
-					.off('click', this._onClick, this)
-					.off('click', this._onTouch, this)
-					.removeLayer(this._marker);
+				this._map.removeLayer(this._marker);
 				delete this._marker;
 			}
 
@@ -1211,13 +1212,10 @@ L.Edit.Poly = L.Handler.extend({
 			this.latlngs = this.latlngs.concat(poly._holes);
 		}
 
-		this._verticesHandlers = [];
-		for (var i = 0; i < this.latlngs.length; i++) {
-			this._verticesHandlers.push(new L.Edit.PolyVerticesEdit(poly, this.latlngs[i], options));
-		}
-
 		this._poly = poly;
 		L.setOptions(this, options);
+
+		this._poly.on('revert-edited', this._updateLatLngs, this);
 	},
 
 	_eachVertexHandler: function (callback) {
@@ -1227,6 +1225,7 @@ L.Edit.Poly = L.Handler.extend({
 	},
 
 	addHooks: function () {
+		this._initHandlers();
 		this._eachVertexHandler(function (handler) {
 			handler.addHooks();
 		});
@@ -1242,6 +1241,20 @@ L.Edit.Poly = L.Handler.extend({
 		this._eachVertexHandler(function (handler) {
 			handler.updateMarkers();
 		});
+	},
+
+	_initHandlers: function () {
+		this._verticesHandlers = [];
+		for (var i = 0; i < this.latlngs.length; i++) {
+			this._verticesHandlers.push(new L.Edit.PolyVerticesEdit(this._poly, this.latlngs[i], this.options));
+		}
+	},
+
+	_updateLatLngs: function (e) {
+		this.latlngs = [e.layer._latlngs];
+		if (e.layer._holes) {
+			this.latlngs = this.latlngs.concat(e.layer._holes);
+		}
 	}
 
 });
@@ -1276,7 +1289,7 @@ L.Edit.PolyVerticesEdit = L.Handler.extend({
 		}
 
 		this._latlngs = latlngs;
-		
+
 		L.setOptions(this, options);
 	},
 
@@ -1397,7 +1410,9 @@ L.Edit.PolyVerticesEdit = L.Handler.extend({
 			.off('dragend', this._fireEdit, this)
 			.off('touchmove', this._onMarkerDrag, this)
 			.off('touchend', this._fireEdit, this)
-			.off('click', this._onMarkerClick, this);
+			.off('click', this._onMarkerClick, this)
+			.off('MSPointerMove', this._onTouchMove, this)
+			.off('MSPointerUp', this._fireEdit, this);
 	},
 
 	_fireEdit: function () {
@@ -1553,14 +1568,12 @@ L.Edit.PolyVerticesEdit = L.Handler.extend({
 		};
 
 		onDragEnd = function () {
-
 			marker.off('dragstart', onDragStart, this);
 			marker.off('dragend', onDragEnd, this);
 			marker.off('touchmove', onDragStart, this);
 
 			this._createMiddleMarker(marker1, marker);
 			this._createMiddleMarker(marker, marker2);
-
 		};
 
 		onClick = function () {
@@ -1624,7 +1637,6 @@ L.Polyline.addInitHook(function () {
 		}
 	});
 });
-
 
 L.Edit = L.Edit || {};
 
